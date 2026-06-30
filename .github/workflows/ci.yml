@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  workflow_call:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate static app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required deploy assets
+        run: |
+          test -f index.html
+          test -f js/app.js
+          test -f js/nothing-ui.js
+          test -f css/nothing-ui.css
+          test -f css/app.css
+          test -f css/tokens.css
+          test -f vercel.json
+          test -f fonts/open/Doto-ROND-wght.ttf
+          test -f fonts/open/Geist-Regular.ttf
+          echo "All static assets present."
+
+      - name: Verify HTML references resolve
+        run: |
+          grep -q 'css/nothing-ui.css' index.html
+          grep -q 'css/app.css' index.html
+          grep -q 'js/nothing-ui.js' index.html
+          grep -q 'js/app.js' index.html
+          echo "Asset references OK."
