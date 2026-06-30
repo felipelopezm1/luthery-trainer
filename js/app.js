@@ -118,6 +118,11 @@ function keyToMidi(key) {
   return (parseInt(m[3], 10) + 1) * 12 + semi;
 }
 function playNote(freq, start, dur, vol = 0.4, type = 'triangle') {
+  if (window.TrainerAudio) {
+    const midi = Math.round(69 + 12 * Math.log2(freq / 440));
+    window.TrainerAudio.playMidi(midi, dur, start, vol);
+    return;
+  }
   const ctx = getAudio();
   const o = ctx.createOscillator(), g = ctx.createGain();
   o.connect(g); g.connect(ctx.destination);
@@ -130,10 +135,12 @@ function playNote(freq, start, dur, vol = 0.4, type = 'triangle') {
   o.start(t); o.stop(t + dur);
 }
 function playChord(root, ivs, block) {
+  if (window.TrainerAudio) { window.TrainerAudio.playChord(root, ivs, block); return; }
   if (block) ivs.forEach(iv => playNote(mf(root + iv), 0, 1.6, 0.32));
   else ivs.forEach((iv, i) => playNote(mf(root + iv), i * 0.1, 1.4, 0.34));
 }
 function playMelody(midis, gap = 0.32, dur = 0.28) {
+  if (window.TrainerAudio) { window.TrainerAudio.playMelody(midis, gap, dur); return; }
   midis.forEach((m, i) => playNote(mf(m), i * gap, dur, 0.4));
 }
 function animWave(id, ms) {
@@ -677,7 +684,7 @@ function renderTeoria() {
   return `${moduleHeader('Secuencia 06 · Teoría', '', total)}
     <h1 class="page-title q-title">${q.q}</h1>
     <div class="exercise-panel">
-      <div class="options-grid cols-${cfg().opts}">${displayOpts.slice(0, cfg().opts).map(o =>
+      <div class="options-grid cols-${displayOpts.length}">${displayOpts.map(o =>
         `<button type="button" class="opt-btn" data-teo-ans="${o}" data-correct="${correctText}">${o}</button>`).join('')}</div>
       <div class="feedback" id="fb-teo"></div>
     </div>` + pageNav(total);
@@ -729,6 +736,27 @@ function render() {
   postRender();
 }
 
+function syncAudioTarget() {
+  const TA = window.TrainerAudio;
+  if (!TA) return;
+  const { mod, page } = state;
+  if (page < 2 || mod === 'inicio' || mod === 'historial') { TA.clearTarget(); return; }
+  const idx = page - 2;
+  if (mod === 'lectura' && state.lect.series[idx]) {
+    const n = state.lect.series[idx];
+    TA.setTarget({ type: 'note', midis: [n.midi], label: n.name, pitchClass: false });
+  } else if (mod === 'acordes' && state.ac.series[idx]) {
+    const item = state.ac.series[idx];
+    const midis = CT[item.type].iv.map(iv => item.root + iv);
+    TA.setTarget({ type: 'chord', midis, chordName: CT[item.type].name, label: midis.map(m => TA.midiToLabel(m)).join(' ') });
+  } else if (mod === 'errores' && state.err.series[idx]) {
+    const ex = state.err.series[idx];
+    TA.setTarget({ type: 'melody', midis: ex.written.map(n => keyToMidi(n.key)), label: 'Melodía · encuentra el error' });
+  } else if (mod === 'ritmo') {
+    TA.setTarget({ type: 'melody', midis: [67, 60, 62, 64], label: 'Pulso fuerte · débil' });
+  } else TA.clearTarget();
+}
+
 function postRender() {
   const { mod, page } = state;
   if (mod === 'ritmo' && page >= 2 && state.rt.series[page - 2]) {
@@ -744,6 +772,7 @@ function postRender() {
   }
   if (isExercisePage() && cfg().timer > 0 && !state.session.interval && !state.session.answered) startTimer();
   updListenUI();
+  syncAudioTarget();
 }
 
 function btnValue(b) {
@@ -819,7 +848,13 @@ document.addEventListener('click', e => {
 
   const lectBtn = e.target.closest('[data-lect-ans]');
   if (lectBtn && !lectBtn.disabled) {
-    bindFeedback(lectBtn, 'fb-lect', lectBtn.dataset.lectAns === lectBtn.dataset.correct, '✓ Correcto', `✗ Era ${lectBtn.dataset.correct}`, 'lect', lectBtn.dataset.correct);
+    const ok = lectBtn.dataset.lectAns === lectBtn.dataset.correct;
+    bindFeedback(lectBtn, 'fb-lect', ok, '✓ Correcto', `✗ Era ${lectBtn.dataset.correct}`, 'lect', lectBtn.dataset.correct);
+    const n = state.lect.series[state.page - 2];
+    if (n && window.TrainerAudio) {
+      const ans = noteByName(lectBtn.dataset.lectAns);
+      if (ans) window.TrainerAudio.compareNote(ans.midi);
+    }
     return;
   }
   const acBtn = e.target.closest('[data-ac-ans]');
@@ -859,3 +894,4 @@ if (!H.byLevel) H.byLevel = { easy: { c: 0, t: 0 }, medium: { c: 0, t: 0 }, hard
 updSc();
 resetSession();
 render();
+if (window.TrainerAudio) window.TrainerAudio.init();

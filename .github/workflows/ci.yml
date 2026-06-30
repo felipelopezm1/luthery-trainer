@@ -22,6 +22,7 @@ jobs:
         run: |
           test -f index.html
           test -f js/app.js
+          test -f js/audio-engine.js
           test -f js/nothing-ui.js
           test -f css/nothing-ui.css
           test -f css/app.css

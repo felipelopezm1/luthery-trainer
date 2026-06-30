@@ -68,12 +68,41 @@
     </nav>
 
     <main class="main" id="app-main">
-      <div class="page-stage" id="page-stage"></div>
+      <div class="content-split">
+        <div class="page-stage" id="page-stage"></div>
+        <aside class="viz-panel" id="viz-panel" aria-label="Audio y visualización">
+          <div class="viz-head">
+            <span class="label">Instrumento</span>
+            <span class="viz-hint">SF2 · compatible con <a href="https://github.com/davy7125/polyphone" target="_blank" rel="noopener">Polyphone</a></span>
+          </div>
+          <div class="instr-tabs" id="instr-tabs"></div>
+          <div class="viz-canvas-wrap">
+            <canvas id="viz-wave" class="viz-canvas" aria-label="Forma de onda"></canvas>
+            <canvas id="viz-spec" class="viz-canvas viz-spec" aria-label="Espectro"></canvas>
+          </div>
+          <div class="viz-keyboard" id="viz-keyboard" aria-label="Teclado MIDI"></div>
+          <div class="midi-block">
+            <div class="midi-row">
+              <button type="button" class="btn btn-outline btn-sq" id="midi-connect" title="Conectar LPK25">MIDI</button>
+              <select class="inp midi-select" id="midi-select" aria-label="Dispositivo MIDI"><option>—</option></select>
+            </div>
+            <p class="midi-status" id="midi-status">Conecta tu AKAI LPK25</p>
+          </div>
+          <div class="compare-block">
+            <span class="label">Comparación en vivo</span>
+            <div class="compare-row"><span>Objetivo</span><b id="compare-target">—</b></div>
+            <div class="compare-row"><span>Tu nota</span><b id="compare-user">—</b></div>
+            <p class="compare-result" id="compare-result">Toca el teclado para comparar con el ejercicio</p>
+          </div>
+        </aside>
+      </div>
     </main>
   </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.2/build/cjs/vexflow.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
+<script src="js/audio-engine.js"></script>
 <script src="js/nothing-ui.js"></script>
 <script src="js/app.js"></script>
 </body>
