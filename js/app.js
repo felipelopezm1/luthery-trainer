@@ -11,8 +11,12 @@ const DIFF = {
   hard:   { label: 'Difícil', count: 15, opts: 6, listens: 2,  timer: 25, chordBlock: true,  errLen: 8, teoTier: 3 }
 };
 const LEVEL_LECT = { easy: 'basico', medium: 'medio', hard: 'avanzado' };
+const MOD_SEC = { ritmo: 'rt', errores: 'err', acordes: 'ac', lectura: 'lect', teoria: 'teo' };
 
-function cfg() { return DIFF[state.level]; }
+function cfg() {
+  const base = DIFF[state.level];
+  return { ...base, label: t('diff_' + state.level) };
+}
 function exCount() { return cfg().count; }
 
 /* ── persistence ── */
@@ -46,6 +50,7 @@ function logA(sec, ok, lbl) {
   }
   H.log.unshift({ sec, ok, lbl, lvl: state.level, ts: Date.now() });
   if (H.log.length > 120) H.log = H.log.slice(0, 120);
+  if (state.run?.sec === sec) state.run.answers.push({ ok, lbl });
   saveH(); updSc();
   if (window.StatsViz) window.StatsViz.refresh();
 }
@@ -86,13 +91,15 @@ function startTimer() {
 function timeoutAnswer() {
   state.session.answered = true;
   const fb = document.querySelector('.exercise-panel .feedback');
-  if (fb) { fb.className = 'feedback show no'; fb.textContent = '⏱ Tiempo agotado — revisa la respuesta correcta marcada.'; }
+  if (fb) { fb.className = 'feedback show no'; fb.textContent = t('timeout'); }
   document.querySelectorAll('.exercise-panel .opt-btn').forEach(b => {
     b.disabled = true;
     if (String(btnValue(b)) === String(b.dataset.correct)) b.classList.add('correct');
   });
   document.querySelectorAll('[data-nav="next"]').forEach(b => b.disabled = false);
   if (state.mod === 'ritmo') rhythmVexReveal(true);
+  const m = moduleMeta(state.mod);
+  if (state.page === m.results - 1) setTimeout(() => goPage(m.results), 700);
 }
 
 function useListen() {
@@ -217,7 +224,7 @@ function drawRhythmVex(el, durs, ts, revealTs = false) {
 function rhythmVexReveal(reveal) {
   const wrap = document.getElementById('vex-rt-wrap');
   const el = document.getElementById('vex-rt');
-  const r = state.rt.series[state.page - 2];
+  const r = state.rt.series[exerciseIndex()];
   if (!el || !r) return;
   if (wrap) wrap.classList.toggle('revealed', reveal);
   drawRhythmVex(el, r.dur, r.ts, reveal);
@@ -346,7 +353,8 @@ const state = {
   ac: { series: [] },
   rt: { series: [] },
   err: { series: [] },
-  teo: { order: [] }
+  teo: { order: [] },
+  run: null
 };
 
 function shuffle(a) { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; }
@@ -365,17 +373,60 @@ function rhythmsForLevel() {
   return RHYTHMS.filter(r => r.tier <= maxTier);
 }
 
+function moduleMeta(mod) {
+  if (mod === 'teoria') return { prep: 0, exStart: 1, results: 1 + exCount() };
+  return { prep: 1, exStart: 2, results: 2 + exCount() };
+}
+
 function pageCount(mod) {
   if (mod === 'inicio') return 3;
   if (mod === 'historial') return 1;
-  return 2 + exCount();
+  if (mod === 'teoria') return 2 + exCount();
+  return 3 + exCount();
 }
 
 function isExercisePage() {
-  return state.page >= 2 && !['inicio', 'historial'].includes(state.mod);
+  if (['inicio', 'historial'].includes(state.mod)) return false;
+  const m = moduleMeta(state.mod);
+  return state.page >= m.exStart && state.page < m.results;
 }
 
-function theoryStartPage() { return 1; }
+function isResultsPage() {
+  if (['inicio', 'historial'].includes(state.mod)) return false;
+  return state.page === moduleMeta(state.mod).results;
+}
+
+function exerciseItemNum() {
+  const m = moduleMeta(state.mod);
+  return state.page - m.exStart + 1;
+}
+
+function exerciseIndex() {
+  return state.page - moduleMeta(state.mod).exStart;
+}
+
+function beginRun(sec) {
+  state.run = { sec, answers: [], level: state.level, mod: state.mod };
+}
+
+function renderRunResults() {
+  const run = state.run || { answers: [], sec: MOD_SEC[state.mod], level: state.level };
+  const total = run.answers.length;
+  const correct = run.answers.filter(a => a.ok).length;
+  const pct = total ? Math.round(correct / total * 100) : 0;
+  const secKey = 'sec_' + (run.sec || MOD_SEC[state.mod] || 'rt');
+  const items = run.answers.map((a, i) =>
+    `<div class="log-item"><span class="${a.ok ? 'ok' : 'no'}">${a.ok ? '✓' : '✗'}</span><span>${i + 1}</span><span>${a.lbl || '—'}</span></div>`
+  ).join('');
+  return `<p class="exam-signal run-done-signal"><span class="d"></span> ${t('run_summary', { mod: t(secKey), diff: t('diff_' + (run.level || state.level)) })}</p>
+    <h1 class="page-title">${t('run_done')}</h1>
+    <div class="hist-grid">
+      <div class="hist-stat"><div class="val">${pct}<span class="pct">%</span></div><div class="lbl">${t('accuracy')}</div></div>
+      <div class="hist-stat"><div class="val">${correct}<span class="pct">/${total}</span></div><div class="lbl">${t('correct')}</div></div>
+    </div>
+    <h4 class="sub">${t('run_items')}</h4>
+    <div class="log-list">${items || '—'}</div>`;
+}
 
 function goPage(n) {
   const max = pageCount(state.mod) - 1;
@@ -407,10 +458,12 @@ function setLevel(lvl) {
 }
 
 function startLect() {
+  beginRun('lect');
   const pool = DIFF_SETS[LEVEL_LECT[state.level]];
   state.lect.series = pickSeries(pool, exCount()).map(n => noteByName(n)).filter(Boolean);
 }
 function startAc() {
+  beginRun('ac');
   const n = exCount();
   state.ac.series = Array.from({ length: n }, () => ({
     type: Math.floor(Math.random() * CT.length),
@@ -418,13 +471,16 @@ function startAc() {
   }));
 }
 function startRt() {
+  beginRun('rt');
   const pool = rhythmsForLevel();
   state.rt.series = pickSeries(pool.map((_, i) => i), exCount()).map(i => pool[i % pool.length]);
 }
 function startErr() {
+  beginRun('err');
   state.err.series = Array.from({ length: exCount() }, () => genErrExercise(cfg().errLen, state.level));
 }
 function startTeo() {
+  beginRun('teo');
   const maxTier = cfg().teoTier;
   const pool = TEO_Q.map((_, i) => i).filter(i => TEO_Q[i].tier <= maxTier);
   state.teo.order = pickSeries(pool, Math.min(exCount(), pool.length));
@@ -456,22 +512,30 @@ function tsDistractors(correct) {
 
 /* ── render helpers ── */
 function diffTabs() {
-  return `<div class="diff-tabs"><span class="label">Dificultad</span>
+  const c = cfg();
+  const listens = c.listens < 99 ? t('listens_meta', { n: c.listens }) : '';
+  const timer = c.timer ? t('timer_meta', { n: c.timer }) : '';
+  return `<div class="diff-tabs"><span class="label">${t('diff_label')}</span>
     <div class="tabpills">${LEVELS.map(l =>
-      `<span class="${state.level === l ? 'on' : ''}" data-level="${l}">${DIFF[l].label}</span>`).join('')}</div>
-    <span class="diff-meta">${cfg().count} ítems · ${cfg().opts} opciones${cfg().listens < 99 ? ` · ${cfg().listens} escuchas` : ''}${cfg().timer ? ` · ${cfg().timer}s` : ''}</span></div>`;
+      `<span class="${state.level === l ? 'on' : ''}" data-level="${l}">${t('diff_' + l)}</span>`).join('')}</div>
+    <span class="diff-meta">${t('diff_meta', { n: c.count, o: c.opts, listens, timer })}</span></div>`;
 }
 
 function exerciseHUD() {
   if (!isExercisePage()) return '';
   const listen = cfg().listens < 99
-    ? `<span class="hud-pill">Escuchas <b data-listen-left>${cfg().listens}</b></span>` : '';
+    ? `<span class="hud-pill">${t('listens_hud')} <b data-listen-left>${cfg().listens}</b></span>` : '';
   const timer = cfg().timer > 0
     ? `<span class="hud-pill timer-pill"><span class="lp hud-timer"><i id="timer-bar" style="width:100%"></i></span><b id="timer-val">${cfg().timer}</b>s</span>` : '';
-  return `<div class="exercise-hud">${listen}${timer}<span class="hud-pill">Ítem <b>${state.page - 1}</b> / ${exCount()}</span></div>`;
+  return `<div class="exercise-hud">${listen}${timer}<span class="hud-pill">${t('item_hud')} <b>${exerciseItemNum()}</b> / ${exCount()}</span></div>`;
 }
 
 function pageNav(total) {
+  if (isResultsPage()) {
+    return `<div class="page-nav results-nav">
+      <button type="button" class="btn btn-primary" data-action="finish-run">${t('back_home')}</button>
+    </div>`;
+  }
   const p = state.page;
   const blockNext = isExercisePage() && !state.session.answered;
   const show = Math.min(total, 9);
@@ -482,13 +546,13 @@ function pageNav(total) {
   }).join('');
   return `<div class="page-nav">
     <button type="button" class="btn btn-outline" data-nav="prev" ${p === 0 ? 'disabled' : ''}>
-      <svg class="ico sm"><use href="#i-chev-l"/></svg><span class="nav-txt">Anterior</span>
+      <svg class="ico sm"><use href="#i-chev-l"/></svg><span class="nav-txt">${t('nav_prev')}</span>
     </button>
     <div class="pager">${dots}</div>
     <button type="button" class="btn btn-primary" data-nav="next" ${p >= total - 1 || blockNext ? 'disabled' : ''}>
-      <span class="nav-txt">Siguiente</span><svg class="ico sm"><use href="#i-chev-r"/></svg>
+      <span class="nav-txt">${t('nav_next')}</span><svg class="ico sm"><use href="#i-chev-r"/></svg>
     </button>
-  </div>${blockNext ? '<p class="nav-hint">Responde para continuar</p>' : ''}`;
+  </div>${blockNext ? `<p class="nav-hint">${t('nav_hint')}</p>` : ''}`;
 }
 
 function stepper(total) {
@@ -561,28 +625,28 @@ function renderRitmo() {
   }
   if (state.page === 1) {
     return `${moduleHeader('Secuencia 02 · Ritmo', '', total)}
-      <h1 class="page-title">Preparación</h1>
+      <h1 class="page-title">${t('prep')}</h1>
       <p class="page-lead">Serie de <strong>${exCount()}</strong> patrones en modo ${cfg().label}.</p>
-      <button type="button" class="btn btn-primary" data-action="start-rt">Comenzar serie</button>` + pageNav(total);
+      <button type="button" class="btn btn-primary" data-action="start-rt">${t('start_rt')}</button>` + pageNav(total);
   }
   if (!state.rt.series.length) startRt();
-  const exIdx = state.page - 2;
+  const exIdx = exerciseIndex();
   const r = state.rt.series[exIdx];
   const options = tsDistractors(r.label);
   return `${moduleHeader('Secuencia 02 · Ritmo', '', total)}
-    <h1 class="page-title">¿Qué compás es?</h1>
-    <p class="exercise-hint">El compás no se muestra — identifícalo escuchando el patrón.</p>
+    <h1 class="page-title">${t('rt_title')}</h1>
+    <p class="exercise-hint">${t('rt_hint')}</p>
     <div class="exercise-panel">
       <div class="vex-host vex-rt-mask${state.session.answered ? ' revealed' : ''}" id="vex-rt-wrap">
         <div id="vex-rt"></div>
         <div class="vex-aural-mask" aria-hidden="true">
           <span class="vex-aural-label">?/?</span>
-          <span class="vex-aural-hint">Escucha</span>
+          <span class="vex-aural-hint">${t('rt_aural')}</span>
         </div>
       </div>
       <div class="audio-row">
-        <button type="button" class="btn btn-outline" data-play="rt" ${canListen() ? '' : 'disabled'}><svg class="ico sm"><use href="#i-play"/></svg> Escuchar patrón</button>
-        <button type="button" class="btn btn-outline" data-play="rt-fast" ${canListen() ? '' : 'disabled'}>Pulso rápido</button>
+        <button type="button" class="btn btn-outline" data-play="rt" ${canListen() ? '' : 'disabled'}><svg class="ico sm"><use href="#i-play"/></svg> ${t('rt_listen')}</button>
+        <button type="button" class="btn btn-outline" data-play="rt-fast" ${canListen() ? '' : 'disabled'}>${t('rt_fast')}</button>
         <div class="wave-bar"><i id="wave-rt"></i></div>
       </div>
       <div class="options-grid cols-${cfg().opts}">${options.map(o =>
@@ -605,17 +669,17 @@ function renderErrores() {
     return `${moduleHeader('Secuencia 03 · Errores', '', total)}
       <h1 class="page-title">Serie auditiva</h1>
       <p class="page-lead">${exCount()} melodías · localiza la nota errónea.</p>
-      <button type="button" class="btn btn-primary" data-action="start-err">Comenzar</button>` + pageNav(total);
+      <button type="button" class="btn btn-primary" data-action="start-err">${t('start_err')}</button>` + pageNav(total);
   }
   if (!state.err.series.length) startErr();
-  const exIdx = state.page - 2;
+  const exIdx = exerciseIndex();
   const ex = state.err.series[exIdx];
   const labels = ex.written.map((n, i) => {
     const nm = noteByMidi(n.key)?.name || `N${i + 1}`;
     return state.level === 'easy' ? `${i + 1}. ${nm}` : state.level === 'medium' ? `Nota ${i + 1}` : `#${i + 1}`;
   });
   return `${moduleHeader('Secuencia 03 · Errores', '', total)}
-    <h1 class="page-title">¿Dónde está el error?</h1>
+    <h1 class="page-title">${t('err_title')}</h1>
     <div class="exercise-panel">
       <div class="vex-host" id="vex-err"></div>
       <div class="audio-row">
@@ -644,23 +708,23 @@ function renderAcordes() {
   if (state.page === 1) {
     return `${moduleHeader('Secuencia 04 · Acordes', '', total)}
       <h1 class="page-title">Serie de ${exCount()}</h1>
-      <button type="button" class="btn btn-primary" data-action="start-ac">Comenzar test</button>` + pageNav(total);
+      <button type="button" class="btn btn-primary" data-action="start-ac">${t('start_ac')}</button>` + pageNav(total);
   }
   if (!state.ac.series.length) startAc();
-  const exIdx = state.page - 2;
+  const exIdx = exerciseIndex();
   const item = state.ac.series[exIdx];
   const chord = CT[item.type];
   const opts = shuffle(CT.map(c => c.name)).slice(0, cfg().opts);
   return `${moduleHeader('Secuencia 04 · Acordes', '', total)}
-    <h1 class="page-title">¿Qué tríada escuchas?</h1>
+    <h1 class="page-title">${t('ac_title')}</h1>
     <div class="exercise-panel">
       <div class="audio-row">
-        <button type="button" class="btn btn-primary" data-play="ac" ${canListen() ? '' : 'disabled'}><svg class="ico sm"><use href="#i-play"/></svg> Escuchar</button>
-        <button type="button" class="btn btn-outline" data-play="ac-arp" ${canListen() ? '' : 'disabled'}>Arpegio</button>
+        <button type="button" class="btn btn-primary" data-play="ac" ${canListen() ? '' : 'disabled'}><svg class="ico sm"><use href="#i-play"/></svg> ${t('ac_listen')}</button>
+        <button type="button" class="btn btn-outline" data-play="ac-arp" ${canListen() ? '' : 'disabled'}>${t('ac_arp')}</button>
         <div class="wave-bar"><i id="wave-ac"></i></div>
       </div>
       <div class="options-grid cols-${cfg().opts}">${opts.map(n =>
-        `<button type="button" class="opt-btn" data-ac-ans="${n}" data-correct="${chord.name}">${n}</button>`).join('')}</div>
+        `<button type="button" class="opt-btn" data-ac-ans="${n}" data-correct="${chord.name}">${chordName(n)}</button>`).join('')}</div>
       <div class="feedback" id="fb-ac"></div>
     </div>` + pageNav(total);
 }
@@ -679,20 +743,20 @@ function renderLectura() {
     return `${moduleHeader('Secuencia 05 · Clave de Sol', '', total)}
       <h1 class="page-title">Serie de ${exCount()} notas</h1>
       <p class="page-lead">Pool: ${LEVEL_LECT[state.level]} · ${cfg().opts} opciones por nota.</p>
-      <button type="button" class="btn btn-primary" data-action="start-lect">Comenzar lectura</button>` + pageNav(total);
+      <button type="button" class="btn btn-primary" data-action="start-lect">${t('start_lect')}</button>` + pageNav(total);
   }
   if (!state.lect.series.length) startLect();
-  const exIdx = state.page - 2;
+  const exIdx = exerciseIndex();
   const note = state.lect.series[exIdx];
   if (!note) return renderLectura();
   const opts = getLectOptions(note);
   return `${moduleHeader('Secuencia 05 · Clave de Sol', '', total)}
-    <h1 class="page-title">¿Qué nota es?</h1>
+    <h1 class="page-title">${t('lect_title')}</h1>
     <div class="exercise-panel">
       <div class="vex-host" id="vex-lect"></div>
       <div class="audio-row">
-        <button type="button" class="btn btn-outline" data-play="lect" ${canListen() ? '' : 'disabled'}><svg class="ico sm"><use href="#i-play"/></svg> Escuchar</button>
-        <button type="button" class="btn btn-outline" data-play="lect-ref" ${canListen() ? '' : 'disabled'}>Do4 referencia</button>
+        <button type="button" class="btn btn-outline" data-play="lect" ${canListen() ? '' : 'disabled'}><svg class="ico sm"><use href="#i-play"/></svg> ${t('lect_listen')}</button>
+        <button type="button" class="btn btn-outline" data-play="lect-ref" ${canListen() ? '' : 'disabled'}>${t('lect_ref')}</button>
         <div class="wave-bar"><i id="wave-lect"></i></div>
       </div>
       <div class="options-grid cols-${cfg().opts}">${opts.map(o =>
@@ -707,10 +771,10 @@ function renderTeoria() {
     return `${moduleHeader('Secuencia 06 · Teoría', '', total)}
       <h1 class="page-title">Cuestionario</h1>
       <p class="page-lead">${exCount()} preguntas · tier ${cfg().teoTier}.</p>
-      <button type="button" class="btn btn-primary" data-action="start-teo">Comenzar</button>` + pageNav(total);
+      <button type="button" class="btn btn-primary" data-action="start-teo">${t('start_teo')}</button>` + pageNav(total);
   }
   if (!state.teo.order.length) startTeo();
-  const qIdx = state.teo.order[state.page - 1];
+  const qIdx = state.teo.order[exerciseIndex()];
   const q = TEO_Q[qIdx];
   const correctText = q.opts[q.a];
   let displayOpts = shuffle([...q.opts]);
@@ -788,6 +852,19 @@ function updSyncMeta() {
 
 function render() {
   const stage = document.getElementById('page-stage');
+  const seqLabels = {
+    ritmo: lang === 'en' ? 'Sequence 02 · Rhythm' : 'Secuencia 02 · Ritmo',
+    errores: lang === 'en' ? 'Sequence 03 · Errors' : 'Secuencia 03 · Errores',
+    acordes: lang === 'en' ? 'Sequence 04 · Chords' : 'Secuencia 04 · Acordes',
+    lectura: lang === 'en' ? 'Sequence 05 · Treble clef' : 'Secuencia 05 · Clave de Sol',
+    teoria: lang === 'en' ? 'Sequence 06 · Theory' : 'Secuencia 06 · Teoría',
+  };
+  if (isResultsPage()) {
+    const total = pageCount(state.mod);
+    stage.innerHTML = moduleHeader(seqLabels[state.mod] || '', '', total) + renderRunResults() + pageNav(total);
+    postRender();
+    return;
+  }
   const map = { inicio: renderInicio, ritmo: renderRitmo, errores: renderErrores, acordes: renderAcordes, lectura: renderLectura, teoria: renderTeoria, historial: renderHistorial };
   stage.innerHTML = map[state.mod]() || '';
   postRender();
@@ -797,8 +874,8 @@ function syncAudioTarget() {
   const TA = window.TrainerAudio;
   if (!TA) return;
   const { mod, page } = state;
-  if (page < 2 || mod === 'inicio' || mod === 'historial') { TA.clearTarget(); return; }
-  const idx = page - 2;
+  if (!isExercisePage() || mod === 'inicio' || mod === 'historial') { TA.clearTarget(); return; }
+  const idx = exerciseIndex();
   if (mod === 'lectura' && state.lect.series[idx]) {
     const n = state.lect.series[idx];
     TA.setTarget({ type: 'note', midis: [n.midi], label: n.name, pitchClass: false });
@@ -815,16 +892,15 @@ function syncAudioTarget() {
 }
 
 function postRender() {
-  const { mod, page } = state;
-  if (mod === 'ritmo' && page >= 2 && state.rt.series[page - 2]) {
-    const r = state.rt.series[page - 2];
+  const { mod } = state;
+  if (mod === 'ritmo' && isExercisePage() && state.rt.series[exerciseIndex()]) {
     rhythmVexReveal(state.session.answered);
   }
-  if (mod === 'errores' && page >= 2 && state.err.series[page - 2]) {
-    drawMelodyVex(document.getElementById('vex-err'), state.err.series[page - 2].written);
+  if (mod === 'errores' && isExercisePage() && state.err.series[exerciseIndex()]) {
+    drawMelodyVex(document.getElementById('vex-err'), state.err.series[exerciseIndex()].written);
   }
-  if (mod === 'lectura' && page >= 2 && state.lect.series[page - 2]) {
-    drawSingleNote(document.getElementById('vex-lect'), state.lect.series[page - 2].key, null);
+  if (mod === 'lectura' && isExercisePage() && state.lect.series[exerciseIndex()]) {
+    drawSingleNote(document.getElementById('vex-lect'), state.lect.series[exerciseIndex()].key, null);
   }
   if (isExercisePage() && cfg().timer > 0 && !state.session.interval && !state.session.answered) startTimer();
   updListenUI();
@@ -851,6 +927,8 @@ function bindFeedback(btn, fbId, ok, msgOk, msgNo, sec, lbl) {
   if (sec) logA(sec, ok, lbl);
   document.querySelectorAll('[data-nav="next"]').forEach(b => b.disabled = false);
   if (sec === 'rt') rhythmVexReveal(true);
+  const m = moduleMeta(state.mod);
+  if (state.page === m.results - 1) setTimeout(() => goPage(m.results), 700);
 }
 
 document.addEventListener('click', e => {
@@ -869,6 +947,11 @@ document.addEventListener('click', e => {
   if (e.target.closest('[data-action="start-rt"]')) { startRt(); goPage(2); return; }
   if (e.target.closest('[data-action="start-err"]')) { startErr(); goPage(2); return; }
   if (e.target.closest('[data-action="start-teo"]')) { startTeo(); goPage(1); return; }
+  if (e.target.closest('[data-action="finish-run"]')) {
+    state.run = null;
+    setMod('inicio');
+    return;
+  }
   if (e.target.closest('[data-action="reset-hist"]')) { H = nH(); saveH(); updSc(); render(); return; }
   if (e.target.closest('[data-action="sync-now"]')) {
     if (window.BeleSync) {
@@ -883,7 +966,7 @@ document.addEventListener('click', e => {
   if (play && !play.disabled) {
     useListen();
     const kind = play.dataset.play;
-    const idx = state.page - 2;
+    const idx = exerciseIndex();
     if (kind === 'lect') {
       const n = state.lect.series[idx]; if (n) { playMidi(n.midi, 0, 1.1, 0.65); animWave('wave-lect', 1100); }
     } else if (kind === 'lect-ref') {
@@ -917,38 +1000,37 @@ document.addEventListener('click', e => {
   const lectBtn = e.target.closest('[data-lect-ans]');
   if (lectBtn && !lectBtn.disabled) {
     const ok = lectBtn.dataset.lectAns === lectBtn.dataset.correct;
-    bindFeedback(lectBtn, 'fb-lect', ok, '✓ Correcto', `✗ Era ${lectBtn.dataset.correct}`, 'lect', lectBtn.dataset.correct);
+    bindFeedback(lectBtn, 'fb-lect', ok, t('fb_ok'), t('fb_wrong', { x: lectBtn.dataset.correct }), 'lect', lectBtn.dataset.correct);
     return;
   }
   const acBtn = e.target.closest('[data-ac-ans]');
   if (acBtn && !acBtn.disabled) {
-    bindFeedback(acBtn, 'fb-ac', acBtn.dataset.acAns === acBtn.dataset.correct, '✓ Correcto', `✗ Era ${acBtn.dataset.correct}`, 'ac', acBtn.dataset.correct);
+    bindFeedback(acBtn, 'fb-ac', acBtn.dataset.acAns === acBtn.dataset.correct, t('fb_ok'), t('fb_wrong', { x: chordName(acBtn.dataset.correct) }), 'ac', acBtn.dataset.correct);
     return;
   }
   const rtBtn = e.target.closest('[data-rt-ans]');
   if (rtBtn && !rtBtn.disabled) {
-    bindFeedback(rtBtn, 'fb-rt', rtBtn.dataset.rtAns === rtBtn.dataset.correct, '✓ Correcto', `✗ Era ${rtBtn.dataset.correct}`, 'rt', rtBtn.dataset.correct);
+    bindFeedback(rtBtn, 'fb-rt', rtBtn.dataset.rtAns === rtBtn.dataset.correct, t('fb_ok'), t('fb_wrong', { x: rtBtn.dataset.correct }), 'rt', rtBtn.dataset.correct);
     return;
   }
   const errBtn = e.target.closest('[data-err-ans]');
   if (errBtn && !errBtn.disabled) {
-    const ex = state.err.series[state.page - 2];
+    const ex = state.err.series[exerciseIndex()];
     bindFeedback(errBtn, 'fb-err', +errBtn.dataset.errAns === ex.errIdx, '✓ ' + ex.errDesc, '✗ ' + ex.errDesc, 'err', ex.errDesc);
     return;
   }
   const teoBtn = e.target.closest('[data-teo-ans]');
   if (teoBtn && !teoBtn.disabled) {
-    bindFeedback(teoBtn, 'fb-teo', teoBtn.dataset.teoAns === teoBtn.dataset.correct, '✓ Correcto', `✗ Correcta: ${teoBtn.dataset.correct}`, 'teo', 'Teoría');
+    bindFeedback(teoBtn, 'fb-teo', teoBtn.dataset.teoAns === teoBtn.dataset.correct, t('fb_ok'), t('fb_wrong_teo', { x: teoBtn.dataset.correct }), 'teo', 'Teoría');
     return;
   }
 });
 
-document.querySelectorAll('.fab button').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.documentElement.dataset.theme = btn.dataset.themeSet;
-    document.querySelector('.app-shell').dataset.theme = btn.dataset.themeSet;
-    document.querySelectorAll('.fab button').forEach(b => b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'));
-  });
+document.querySelectorAll('[data-theme-set]').forEach(btn => {
+  btn.addEventListener('click', () => setTheme(btn.dataset.themeSet));
+});
+document.querySelectorAll('[data-lang-set]').forEach(btn => {
+  btn.addEventListener('click', () => setLang(btn.dataset.langSet));
 });
 
 window.addEventListener('resize', () => { if (isExercisePage()) postRender(); });
@@ -973,6 +1055,7 @@ function refreshFocusLayout() {
   window.dispatchEvent(new Event('resize'));
   if (window.StatsViz) window.StatsViz.refresh();
   if (window.TrainerAudio?.drawKeyboard) window.TrainerAudio.drawKeyboard();
+  requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
 }
 
 function restoreFocusElement(restore) {
@@ -995,7 +1078,11 @@ function updateFocusButtons() {
 function closeFocus() {
   const lb = document.getElementById('focus-lightbox');
   if (!focusRestore) {
-    if (lb) { lb.classList.remove('is-open'); lb.hidden = true; lb.setAttribute('aria-hidden', 'true'); }
+    if (lb) {
+      lb.classList.remove('is-open', 'focus-lightbox--viz', 'focus-lightbox--stats');
+      lb.hidden = true;
+      lb.setAttribute('aria-hidden', 'true');
+    }
     focusMode = '';
     document.body.classList.remove('focus-open');
     updateFocusButtons();
@@ -1003,6 +1090,7 @@ function closeFocus() {
   }
   lb?.classList.remove('is-open');
   document.body.classList.remove('focus-open');
+  lb?.classList.remove('focus-lightbox--viz', 'focus-lightbox--stats');
   setTimeout(() => {
     restoreFocusElement(focusRestore);
     focusRestore = null;
@@ -1030,6 +1118,8 @@ function openFocus(mode) {
 
   lb.hidden = false;
   lb.setAttribute('aria-hidden', 'false');
+  lb.classList.toggle('focus-lightbox--viz', mode === 'viz');
+  lb.classList.toggle('focus-lightbox--stats', mode === 'stats');
   document.body.classList.add('focus-open');
   focusMode = mode;
   updateFocusButtons();
@@ -1060,6 +1150,8 @@ document.addEventListener('click', e => {
 
 (async function boot() {
   if (!H.byLevel) H.byLevel = { easy: { c: 0, t: 0 }, medium: { c: 0, t: 0 }, hard: { c: 0, t: 0 } };
+  setTheme(loadTheme());
+  applyChromeI18n();
   if (window.BeleSync) {
     await window.BeleSync.initMerge(
       () => H,

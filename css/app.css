@@ -351,6 +351,11 @@
   opacity: 1;
 }
 
+.focus-lightbox.focus-lightbox--viz .focus-lightbox-shell {
+  width: min(1120px, 98vw);
+  height: min(92vh, 940px);
+}
+
 .focus-lightbox-head {
   display: flex;
   align-items: center;
@@ -406,12 +411,48 @@
   flex: 1;
 }
 
-.focus-lightbox-body > .viz-panel .viz-keyboard {
-  height: min(24vh, 200px);
+/* Viz panel — expand canvases + keyboard to fill lightbox width */
+.focus-lightbox-body > .viz-panel.focus-elevated {
+  padding: 20px 24px 24px;
+  gap: 14px;
 }
 
-.focus-lightbox-body > .viz-panel .viz-canvas {
-  height: min(14vh, 120px);
+.focus-lightbox-body > .viz-panel.focus-elevated .viz-canvas-wrap {
+  flex: 1 1 auto;
+  min-height: min(34vh, 300px);
+  gap: 10px;
+}
+
+.focus-lightbox-body > .viz-panel.focus-elevated .viz-canvas {
+  flex: 1;
+  min-height: 96px;
+  height: auto !important;
+}
+
+.focus-lightbox-body > .viz-panel.focus-elevated .viz-spec {
+  flex: 1;
+  min-height: 72px;
+  height: auto !important;
+}
+
+.focus-lightbox-body > .viz-panel.focus-elevated .viz-keyboard {
+  width: 100%;
+  height: clamp(96px, 20vh, 220px);
+  min-height: 96px;
+  overflow-x: hidden;
+}
+
+.focus-lightbox-body > .viz-panel.focus-elevated .vkey.white {
+  max-width: none;
+  flex: 1 1 0;
+}
+
+.focus-lightbox-body > .viz-panel.focus-elevated .vkey.black {
+  max-width: none;
+  min-width: 0;
+  flex: 0.55 1 0;
+  margin-left: -2%;
+  margin-right: -2%;
 }
 
 .focus-lightbox-body > .util-panel .util-gl-main {
@@ -1157,6 +1198,13 @@ body.focus-open {
   letter-spacing: 0.08em;
   margin-top: 8px;
 }
+
+.results-nav {
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.run-done-signal { margin-bottom: 4px; }
 
 @media (max-width: 420px) {
   .nav-txt { display: none; }
