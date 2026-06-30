@@ -12,6 +12,7 @@ const TrainerAudio = (() => {
 
   const NOTE_NAMES = ['Do','Do♯','Re','Re♯','Mi','Fa','Fa♯','Sol','Sol♯','La','La♯','Si'];
   const INSTR_KEY = 'music_bele_instr';
+  const MIDI_DEV_KEY = 'music_bele_midi_dev';
   const SF_PACK = 'MusyngKite';
 
   let ac = null, master = null, analyser = null;
@@ -142,7 +143,7 @@ const TrainerAudio = (() => {
     lastUser = userMidi;
     if (target.type === 'note') {
       const t = target.midis[0];
-      const ok = userMidi === t || (target.pitchClass && (userMidi % 12) === (t % 12));
+      const ok = userMidi === t || (target.pitchClass === true && (userMidi % 12) === (t % 12));
       compareResult = {
         ok,
         msg: ok
@@ -166,41 +167,75 @@ const TrainerAudio = (() => {
   }
 
   /* ── Web MIDI (LPK25 etc.) ── */
+  function listMidiInputs() {
+    if (!midiAccess) return [];
+    return [...midiAccess.inputs.values()];
+  }
+
+  function pickMidiInput(inputs) {
+    if (!inputs.length) return null;
+    const saved = localStorage.getItem(MIDI_DEV_KEY);
+    if (saved) {
+      const hit = inputs.find(i => i.id === saved);
+      if (hit) return hit;
+    }
+    const pref = inputs.find(i => /lpk|akai|keyboard|key/i.test(i.name || ''));
+    return pref || inputs[0];
+  }
+
+  function attachInput(input) {
+    if (!input) return;
+    if (activeInput) activeInput.onmidimessage = null;
+    activeInput = input;
+    input.onmidimessage = onMidi;
+    localStorage.setItem(MIDI_DEV_KEY, input.id);
+    setMidiStatus(`MIDI · ${input.name || input.id}`);
+    renderMidiSelect();
+  }
+
   async function connectMidi() {
     if (!navigator.requestMIDIAccess) {
-      setMidiStatus('Web MIDI no soportado en este navegador');
-      return;
+      setMidiStatus('Web MIDI no soportado (usa Chrome/Edge)');
+      return false;
     }
     try {
-      midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+      if (!midiAccess) {
+        midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+        midiAccess.onstatechange = () => bindMidiInputs();
+      }
       bindMidiInputs();
-      midiAccess.onstatechange = bindMidiInputs;
-      setMidiStatus(activeInput ? activeInput.name : 'Conecta tu LPK25…');
+      return !!activeInput;
     } catch (e) {
-      setMidiStatus('Permiso MIDI denegado');
+      setMidiStatus('Permiso MIDI denegado — pulsa MIDI o toca la página');
+      return false;
     }
   }
 
   function bindMidiInputs() {
     if (!midiAccess) return;
-    if (activeInput) activeInput.onmidimessage = null;
-    activeInput = null;
-    for (const input of midiAccess.inputs.values()) {
-      activeInput = input;
-      input.onmidimessage = onMidi;
-      break;
+    const inputs = listMidiInputs();
+    if (!activeInput || !inputs.find(i => i.id === activeInput.id)) {
+      attachInput(pickMidiInput(inputs));
+    } else {
+      activeInput.onmidimessage = onMidi;
+      setMidiStatus(`MIDI · ${activeInput.name || activeInput.id}`);
+      renderMidiSelect();
     }
-    setMidiStatus(activeInput ? `MIDI · ${activeInput.name}` : 'Sin controlador MIDI');
-    renderMidiSelect();
+    if (!inputs.length) setMidiStatus('Sin controlador · conecta LPK25 y espera…');
   }
 
   function onMidi(e) {
-    const [st, n, v] = e.data;
-    if (st >= 144 && st <= 159 && v > 0) {
-      playUserNote(n, v / 127);
-      compareNote(n);
-    } else if ((st >= 128 && st <= 143) || (st >= 144 && st <= 159 && v === 0)) {
-      releaseUserNote(n);
+    const data = e.data;
+    if (!data || data.length < 3) return;
+    const st = data[0], n = data[1], v = data[2];
+    const cmd = st & 0xf0;
+    if ((cmd === 0x90 && v > 0) || (cmd === 0x80)) {
+      if (cmd === 0x90) {
+        playUserNote(n, v / 127);
+        compareNote(n);
+      } else {
+        releaseUserNote(n);
+      }
     }
   }
 
@@ -225,22 +260,22 @@ const TrainerAudio = (() => {
 
   function renderMidiSelect() {
     const sel = document.getElementById('midi-select');
-    if (!sel || !midiAccess) return;
+    if (!sel) return;
     sel.innerHTML = '';
-    let has = false;
-    for (const input of midiAccess.inputs.values()) {
-      has = true;
+    const inputs = listMidiInputs();
+    if (!inputs.length) {
+      const o = document.createElement('option');
+      o.textContent = midiAccess ? 'Ningún dispositivo' : '—';
+      sel.appendChild(o);
+      return;
+    }
+    inputs.forEach(input => {
       const o = document.createElement('option');
       o.value = input.id;
       o.textContent = input.name || input.id;
       o.selected = activeInput && input.id === activeInput.id;
       sel.appendChild(o);
-    }
-    if (!has) {
-      const o = document.createElement('option');
-      o.textContent = 'Ningún dispositivo';
-      sel.appendChild(o);
-    }
+    });
   }
 
   /* ── visualization ── */
@@ -336,7 +371,7 @@ const TrainerAudio = (() => {
       if (target && target.midis.some(t => t % 12 === m % 12) && !target.midis.includes(m))
         key.classList.add('target-pc');
       if (activeNotes.has(m)) key.classList.add('user');
-      if (lastUser === m) key.classList.add(compareResult?.ok ? 'match' : 'miss');
+      if (lastUser === m) key.classList.add(compareResult?.ok ? 'match' : compareResult?.ok === false ? 'miss' : 'user');
       const fl = keyFlash[m];
       if (fl && performance.now() - fl.t < 400) key.classList.add('flash-' + fl.kind);
       kb.appendChild(key);
@@ -382,9 +417,12 @@ const TrainerAudio = (() => {
     drawKeyboard();
     updateCompareUI();
     startVizLoop();
+    renderMidiSelect();
     const def = INSTRUMENTS.find(i => i.id === currentId) || INSTRUMENTS[0];
     setInstrStatus(`Cargando ${def.label}…`);
     loadInstrument(currentId);
+    connectMidi();
+    document.addEventListener('pointerdown', () => { if (!midiAccess) connectMidi(); }, { once: true });
   }
 
   function bindUI() {
@@ -395,15 +433,8 @@ const TrainerAudio = (() => {
     document.getElementById('midi-connect')?.addEventListener('click', connectMidi);
     document.getElementById('midi-select')?.addEventListener('change', e => {
       if (!midiAccess) return;
-      for (const input of midiAccess.inputs.values()) {
-        if (input.id === e.target.value) {
-          if (activeInput) activeInput.onmidimessage = null;
-          activeInput = input;
-          input.onmidimessage = onMidi;
-          setMidiStatus(`MIDI · ${input.name}`);
-          break;
-        }
-      }
+      const input = listMidiInputs().find(i => i.id === e.target.value);
+      if (input) attachInput(input);
     });
     document.getElementById('viz-keyboard')?.addEventListener('click', e => {
       const k = e.target.closest('.vkey');
@@ -423,6 +454,7 @@ const TrainerAudio = (() => {
     getInstruments: () => INSTRUMENTS,
     loadInstrument,
     whenReady,
+    drawKeyboard,
   };
 })();
 

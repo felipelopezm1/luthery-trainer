@@ -68,12 +68,21 @@
     </nav>
 
     <main class="main" id="app-main">
-      <div class="content-split">
-        <div class="page-stage" id="page-stage"></div>
+      <div class="content-split" id="content-split">
+        <div class="stage-pane" id="stage-pane">
+          <div class="pane-bar">
+            <span class="pane-label">Ejercicio</span>
+            <button type="button" class="focus-toggle" data-focus="exercise" aria-pressed="false" title="Expandir ejercicio">⛶</button>
+          </div>
+          <div class="page-stage" id="page-stage"></div>
+        </div>
         <aside class="viz-panel" id="viz-panel" aria-label="Audio y visualización">
           <div class="viz-head">
             <span class="label">Instrumento</span>
-            <span class="viz-hint">SF2 · compatible con <a href="https://github.com/davy7125/polyphone" target="_blank" rel="noopener">Polyphone</a></span>
+            <div class="viz-head-actions">
+              <span class="viz-hint">SF2 · <a href="https://github.com/davy7125/polyphone" target="_blank" rel="noopener">Polyphone</a></span>
+              <button type="button" class="focus-toggle" data-focus="viz" aria-pressed="false" title="Expandir panel MIDI">⛶</button>
+            </div>
           </div>
           <div class="instr-tabs" id="instr-tabs"></div>
           <p class="instr-status" id="instr-status">Cargando piano…</p>
@@ -97,6 +106,7 @@
           </div>
         </aside>
       </div>
+      <button type="button" class="focus-back" id="focus-back" hidden>Volver al layout</button>
     </main>
   </div>
 </div>

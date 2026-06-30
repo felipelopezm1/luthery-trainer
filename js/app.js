@@ -229,10 +229,15 @@ function drawMelodyVex(el, notes) {
 
 /* ── data ── */
 const NOTE_NAMES = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si'];
+const DIATONIC_SEMI = [0, 2, 4, 5, 7, 9, 11];
 const NOTES_ALL = [];
 for (let o = 3; o <= 6; o++)
   for (let n = 0; n < 7; n++)
-    NOTES_ALL.push({ name: `${NOTE_NAMES[n]}${o}`, key: `${'cderfgab'[n]}/${o}`, midi: (o + 1) * 12 + n });
+    NOTES_ALL.push({
+      name: `${NOTE_NAMES[n]}${o}`,
+      key: `${'cderfgab'[n]}/${o}`,
+      midi: (o + 1) * 12 + DIATONIC_SEMI[n],
+    });
 
 const DIFF_SETS = {
   basico: ['Mi4','Fa4','Sol4','La4','Si4','Do5','Re5','Mi5','Fa5','Sol5'],
@@ -893,11 +898,6 @@ document.addEventListener('click', e => {
   if (lectBtn && !lectBtn.disabled) {
     const ok = lectBtn.dataset.lectAns === lectBtn.dataset.correct;
     bindFeedback(lectBtn, 'fb-lect', ok, '✓ Correcto', `✗ Era ${lectBtn.dataset.correct}`, 'lect', lectBtn.dataset.correct);
-    const n = state.lect.series[state.page - 2];
-    if (n && window.TrainerAudio) {
-      const ans = noteByName(lectBtn.dataset.lectAns);
-      if (ans) window.TrainerAudio.compareNote(ans.midi);
-    }
     return;
   }
   const acBtn = e.target.closest('[data-ac-ans]');
@@ -938,6 +938,27 @@ document.addEventListener('change', e => {
     window.BeleSync.setName(e.target.value);
     window.BeleSync.schedulePush(() => H, () => state.level);
   }
+});
+
+let focusMode = '';
+function setFocus(mode) {
+  focusMode = focusMode === mode ? '' : mode;
+  const split = document.getElementById('content-split');
+  const back = document.getElementById('focus-back');
+  if (split) split.dataset.focus = focusMode;
+  document.querySelectorAll('.focus-toggle').forEach(btn => {
+    const on = btn.dataset.focus === focusMode;
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.title = on ? 'Volver al layout' : (btn.dataset.focus === 'viz' ? 'Expandir panel MIDI' : 'Expandir ejercicio');
+  });
+  if (back) back.hidden = !focusMode;
+  if (focusMode && window.TrainerAudio) window.TrainerAudio.drawKeyboard?.();
+}
+
+document.addEventListener('click', e => {
+  const fb = e.target.closest('[data-focus]');
+  if (fb) { setFocus(fb.dataset.focus); return; }
+  if (e.target.closest('#focus-back')) { setFocus(focusMode); return; }
 });
 
 (async function boot() {
