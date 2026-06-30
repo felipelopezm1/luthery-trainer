@@ -827,8 +827,22 @@ function renderHistorial() {
       <span>${t('sec_' + (e.sec === 'err' ? 'err' : e.sec))}</span><span>${t('diff_' + e.lvl)}</span><span>${noteDisplayName(e.lbl) || e.lbl || '—'}</span>
       <span class="log-time">${localeDate(e.ts)}</span></div>`;
   }).join('');
+  const user = window.BeleAuth?.getUser?.();
+  const guest = window.BeleAuth?.isGuest?.();
+  const accountBlock = user
+    ? `<div class="account-panel">
+        <h4 class="sub">${t('auth_account')}</h4>
+        <p class="account-meta">${t('auth_signed_in', { n: esc(user.name || user.email || '—') })}</p>
+        <button type="button" class="btn btn-outline" id="hist-logout">${t('auth_sign_out')}</button>
+      </div>`
+    : `<div class="account-panel account-panel--guest">
+        <h4 class="sub">${t('auth_account')}</h4>
+        <p class="account-meta">${guest ? t('auth_guest_note') : t('auth_guest_prompt')}</p>
+        <a class="btn btn-primary" href="login.html">${t('auth_sign_in')}</a>
+      </div>`;
   return `<div class="page-meta"><span class="seq-label">${t('hist_meta')}</span></div>
     <h1 class="page-title">${t('hist_title')}</h1>
+    ${accountBlock}
     <div class="hist-grid">
       <div class="hist-stat"><div class="val">${pct}<span class="pct">%</span></div><div class="lbl">${t('hist_precision')}</div></div>
       <div class="hist-stat"><div class="val">${H.streak}</div><div class="lbl">${t('hist_streak')}</div></div>
@@ -862,8 +876,9 @@ function updSyncMeta() {
   const st = window.BeleSync.getStatus();
   const labels = { idle: t('sync_idle'), syncing: t('sync_syncing'), ok: t('sync_ok'), err: t('sync_err'), offline: t('sync_offline') };
   const user = window.BeleAuth?.getUser?.();
+  const guest = window.BeleAuth?.isGuest?.();
   const uid = window.BeleSync.getUid();
-  const who = user?.name || user?.email?.split('@')[0] || uid.slice(0, 8);
+  const who = user?.name || user?.email?.split('@')[0] || (guest ? t('auth_guest_mode') : uid.slice(0, 8));
   el.textContent = `${labels[st] || st} · ${who}…`;
 }
 window.updSyncMeta = updSyncMeta;
@@ -971,7 +986,7 @@ document.addEventListener('click', e => {
     return;
   }
   if (e.target.closest('[data-action="reset-hist"]')) { H = nH(); saveH(); updSc(); render(); return; }
-  if (e.target.closest('#auth-logout')) {
+  if (e.target.closest('#auth-logout') || e.target.closest('#hist-logout')) {
     if (window.BeleAuth) window.BeleAuth.logout().then(() => { location.href = 'login.html'; });
     return;
   }
@@ -1186,7 +1201,6 @@ document.addEventListener('click', e => {
   applyChromeI18n();
   if (window.BeleAuth) {
     await window.BeleAuth.fetchMe();
-    if (!window.BeleAuth.requireAuth()) return;
     window.BeleAuth.updateUserChip();
   }
   if (window.BeleSync) {

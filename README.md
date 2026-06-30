@@ -62,7 +62,7 @@ Copy `.env.example` to `.env.local` and fill in Upstash credentials for sync to 
 | `bele:progress:{userId}` | Scores, activity log, streaks, difficulty level |
 | `bele:user:{userId}` | Profile metadata |
 
-Sign up at `/login.html`. Progress sync requires a logged-in session (Bearer token). Anonymous device UUIDs are merged into the account on signup/login.
+Sign up at `/login.html` for cloud sync across devices, or use **Continue without account** for local-only progress. Anonymous device UUIDs merge into your account on signup/login.
 
 **Capacity (Upstash free tier, rough guide)**
 

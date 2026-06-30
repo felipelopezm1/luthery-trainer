@@ -124,7 +124,7 @@ const I18N = {
     pg_playing: 'Reproduciendo…', pg_pane: 'Playground',
     auth_page_title: 'Acceso · BELE Laudería',
     auth_title: 'Entrenador Musical',
-    auth_lead: 'Inicia sesión para guardar tu progreso en la nube.',
+    auth_lead: 'Inicia sesión para la nube, o entra sin cuenta.',
     auth_tab_login: 'Entrar', auth_tab_signup: 'Crear cuenta',
     auth_name: 'Nombre', auth_email: 'Correo', auth_password: 'Contraseña',
     auth_name_ph: 'Tu nombre', auth_email_ph: 'tu@correo.com', auth_password_ph: 'Mínimo 8 caracteres',
@@ -138,6 +138,10 @@ const I18N = {
     auth_err_invalid_credentials: 'Correo o contraseña incorrectos.',
     auth_err_generic: 'No se pudo completar. Inténtalo de nuevo.',
     auth_sync_note: 'Progreso sincronizado con Upstash Redis.',
+    auth_account: 'Cuenta', auth_signed_in: 'Sesión iniciada como {n}',
+    auth_guest: 'Continuar sin cuenta', auth_guest_mode: 'Invitado', auth_guest_note: 'Modo invitado · el progreso se guarda en este dispositivo.',
+    auth_guest_prompt: 'Inicia sesión para sincronizar tu progreso entre dispositivos.',
+    auth_or: 'o', auth_lead_guest: 'Inicia sesión para la nube, o entra sin cuenta.',
   },
   en: {
     brand: 'BELE TRAINER',
@@ -263,7 +267,7 @@ const I18N = {
     pg_playing: 'Playing…', pg_pane: 'Playground',
     auth_page_title: 'Sign in · BELE Laudería',
     auth_title: 'Music Trainer',
-    auth_lead: 'Sign in to save your progress to the cloud.',
+    auth_lead: 'Sign in for cloud sync, or continue without an account.',
     auth_tab_login: 'Sign in', auth_tab_signup: 'Sign up',
     auth_name: 'Name', auth_email: 'Email', auth_password: 'Password',
     auth_name_ph: 'Your name', auth_email_ph: 'you@email.com', auth_password_ph: 'At least 8 characters',
@@ -277,6 +281,10 @@ const I18N = {
     auth_err_invalid_credentials: 'Incorrect email or password.',
     auth_err_generic: 'Something went wrong. Try again.',
     auth_sync_note: 'Progress synced via Upstash Redis.',
+    auth_account: 'Account', auth_signed_in: 'Signed in as {n}',
+    auth_guest: 'Continue without account', auth_guest_mode: 'Guest', auth_guest_note: 'Guest mode · progress stays on this device.',
+    auth_guest_prompt: 'Sign in to sync progress across devices.',
+    auth_or: 'or', auth_lead_guest: 'Sign in for cloud sync, or continue without an account.',
   },
 };
 
@@ -405,7 +413,9 @@ function applyChromeI18n() {
     b.setAttribute('aria-pressed', b.dataset.langSet === lang ? 'true' : 'false');
   });
   document.querySelectorAll('[data-i18n]').forEach(el => {
-    el.textContent = t(el.dataset.i18n);
+    const k = el.dataset.i18n;
+    const translated = t(k);
+    if (translated && translated !== k) el.textContent = translated;
   });
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
     el.placeholder = t(el.dataset.i18nPlaceholder);

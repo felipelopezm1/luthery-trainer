@@ -418,7 +418,7 @@ const Playground = (() => {
         <h4 class="sub">${t('pg_save_h')}</h4>
         <div class="pg-save-row pg-save-form">
           <input type="text" id="pg-save-name" class="pg-input" maxlength="48" placeholder="${t('pg_save_ph')}" data-i18n-placeholder="pg_save_ph">
-          <button type="button" class="btn primary" data-pg-action="save">${t('pg_save')}</button>
+          <button type="button" class="btn btn-primary" data-pg-action="save">${t('pg_save')}</button>
           <button type="button" class="btn ghost" data-pg-action="new">${t('pg_new')}</button>
         </div>
         <span class="pg-save-fb" id="pg-save-fb">${t('pg_saved')}</span>

@@ -3,6 +3,7 @@
   const TOKEN_KEY = 'music_bele_token';
   const USER_KEY = 'music_bele_user';
   const ANON_UID_KEY = 'music_bele_uid';
+  const GUEST_KEY = 'music_bele_guest';
 
   let cachedUser = null;
 
@@ -30,6 +31,10 @@
     return !!getToken() && !!getUserId();
   }
 
+  function isGuest() {
+    return localStorage.getItem(GUEST_KEY) === '1';
+  }
+
   function getAnonUid() {
     let uid = localStorage.getItem(ANON_UID_KEY);
     if (!uid) {
@@ -42,15 +47,26 @@
   function persistSession(token, user) {
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(USER_KEY, JSON.stringify(user));
+    localStorage.removeItem(GUEST_KEY);
     cachedUser = user;
-    document.dispatchEvent(new CustomEvent('bele:auth', { detail: { user } }));
+    document.dispatchEvent(new CustomEvent('bele:auth', { detail: { user, guest: false } }));
   }
 
   function clearSession() {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     cachedUser = null;
-    document.dispatchEvent(new CustomEvent('bele:auth', { detail: { user: null } }));
+    document.dispatchEvent(new CustomEvent('bele:auth', { detail: { user: null, guest: isGuest() } }));
+  }
+
+  function continueAsGuest() {
+    clearSession();
+    localStorage.setItem(GUEST_KEY, '1');
+    document.dispatchEvent(new CustomEvent('bele:auth', { detail: { user: null, guest: true } }));
+  }
+
+  function clearGuest() {
+    localStorage.removeItem(GUEST_KEY);
   }
 
   function authHeaders(extra) {
@@ -110,25 +126,24 @@
       await fetch('/api/auth/logout', { method: 'POST', headers: authHeaders() });
     } catch {}
     clearSession();
-  }
-
-  function requireAuth(loginPath) {
-    if (isLoggedIn()) return true;
-    const next = encodeURIComponent(location.pathname.split('/').pop() || 'index.html');
-    location.href = `${loginPath || 'login.html'}?next=${next}`;
-    return false;
+    clearGuest();
   }
 
   function updateUserChip() {
     const chip = document.getElementById('user-chip');
     if (!chip) return;
     const user = getUser();
-    if (!user) {
-      chip.innerHTML = `<a class="user-link" href="login.html">${t('auth_sign_in')}</a>`;
+    if (user) {
+      chip.innerHTML = `<span class="user-name" title="${user.email}">${user.name}</span>
+        <button type="button" class="user-out" id="auth-logout" data-i18n="auth_sign_out">${t('auth_sign_out')}</button>`;
       return;
     }
-    chip.innerHTML = `<span class="user-name" title="${user.email}">${user.name}</span>
-      <button type="button" class="user-out" id="auth-logout" data-i18n="auth_sign_out">${t('auth_sign_out')}</button>`;
+    if (isGuest()) {
+      chip.innerHTML = `<span class="user-guest">${t('auth_guest_mode')}</span>
+        <a class="user-link" href="login.html">${t('auth_sign_in')}</a>`;
+      return;
+    }
+    chip.innerHTML = `<a class="user-link" href="login.html">${t('auth_sign_in')}</a>`;
   }
 
   cachedUser = loadStoredUser();
@@ -139,12 +154,13 @@
     getUserId,
     getAnonUid,
     isLoggedIn,
+    isGuest,
     authHeaders,
     signup,
     login,
     fetchMe,
     logout,
-    requireAuth,
+    continueAsGuest,
     updateUserChip,
   };
 })();

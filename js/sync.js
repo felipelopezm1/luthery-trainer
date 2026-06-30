@@ -54,11 +54,6 @@
       emitStatus();
       return null;
     }
-    if (window.BeleAuth && !window.BeleAuth.isLoggedIn()) {
-      status = 'idle';
-      emitStatus();
-      return null;
-    }
     try {
       const qs = window.BeleAuth?.isLoggedIn?.()
         ? ''
@@ -83,11 +78,6 @@
   async function push(progress, level, name) {
     if (!navigator.onLine) {
       status = 'offline';
-      emitStatus();
-      return false;
-    }
-    if (window.BeleAuth && !window.BeleAuth.isLoggedIn()) {
-      status = 'idle';
       emitStatus();
       return false;
     }
@@ -124,7 +114,6 @@
   }
 
   function schedulePush(getProgress, getLevel) {
-    if (window.BeleAuth && !window.BeleAuth.isLoggedIn()) return;
     clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {
       push(getProgress(), getLevel(), getName());
@@ -132,7 +121,6 @@
   }
 
   async function initMerge(getProgress, getLevel, applyRemote) {
-    if (window.BeleAuth && !window.BeleAuth.isLoggedIn()) return;
     const remote = await pull();
     const local = getProgress();
     const localTs = getSyncTs();
