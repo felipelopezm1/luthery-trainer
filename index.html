@@ -105,6 +105,23 @@
             <p class="compare-result" id="compare-result">Toca el teclado para comparar con el ejercicio</p>
           </div>
         </aside>
+        <aside class="util-panel" id="util-panel" aria-label="Utilización y progreso">
+          <div class="util-head">
+            <span class="label">Utilización</span>
+            <div class="util-head-actions">
+              <span class="util-context-label" id="util-context-label">Panel general</span>
+              <button type="button" class="focus-toggle" data-focus="stats" aria-pressed="false" title="Expandir estadísticas">⛶</button>
+            </div>
+          </div>
+          <div class="util-ring-wrap">
+            <canvas id="util-gl-main" class="util-gl" aria-label="Precisión y secciones"></canvas>
+            <div class="util-ring-label" id="util-ring-label">—</div>
+          </div>
+          <div class="util-kpis" id="util-kpis"></div>
+          <span class="util-sub">Tendencia · sesiones recientes</span>
+          <canvas id="util-gl-detail" class="util-gl util-gl-sm" aria-label="Tendencia por sesión"></canvas>
+          <p class="util-caption" id="util-caption">Sin actividad registrada aún</p>
+        </aside>
       </div>
       <button type="button" class="focus-back" id="focus-back" hidden>Volver al layout</button>
     </main>
@@ -116,6 +133,7 @@
 <script src="js/audio-engine.js"></script>
 <script src="js/nothing-ui.js"></script>
 <script src="js/sync.js"></script>
+<script src="js/stats-viz.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

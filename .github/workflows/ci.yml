@@ -31,6 +31,7 @@ jobs:
           test -f index.html
           test -f js/app.js
           test -f js/sync.js
+          test -f js/stats-viz.js
           test -f js/audio-engine.js
           test -f js/nothing-ui.js
           test -f css/nothing-ui.css

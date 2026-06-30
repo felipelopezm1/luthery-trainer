@@ -47,6 +47,7 @@ function logA(sec, ok, lbl) {
   H.log.unshift({ sec, ok, lbl, lvl: state.level, ts: Date.now() });
   if (H.log.length > 120) H.log = H.log.slice(0, 120);
   saveH(); updSc();
+  if (window.StatsViz) window.StatsViz.refresh();
 }
 
 function updSc() {
@@ -812,6 +813,7 @@ function postRender() {
   updListenUI();
   syncAudioTarget();
   if (state.mod === 'historial') updSyncMeta();
+  if (window.StatsViz) window.StatsViz.refresh();
 }
 
 function btnValue(b) {
@@ -953,6 +955,7 @@ function setFocus(mode) {
   });
   if (back) back.hidden = !focusMode;
   if (focusMode && window.TrainerAudio) window.TrainerAudio.drawKeyboard?.();
+  if (window.StatsViz) window.StatsViz.refresh();
 }
 
 document.addEventListener('click', e => {
@@ -980,4 +983,10 @@ document.addEventListener('click', e => {
   render();
   updSyncMeta();
   if (window.TrainerAudio) window.TrainerAudio.init();
+  if (window.StatsViz) {
+    window.StatsViz.init({
+      getProgress: () => H,
+      getContext: () => ({ mod: state.mod, level: state.level }),
+    });
+  }
 })();
