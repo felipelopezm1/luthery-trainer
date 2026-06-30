@@ -788,6 +788,43 @@
 
 .reset-btn { margin-top: 14px; width: 100%; }
 
+.sync-panel {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.sync-name {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 0.85rem;
+}
+
+.sync-name input {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.sync-meta {
+  font-size: 0.8rem;
+  opacity: 0.75;
+  margin: 0 0 10px;
+}
+
+.sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sync-actions .btn { margin-top: 0; width: auto; }
+
 @media (min-width: 520px) {
   .reset-btn { width: auto; }
 }

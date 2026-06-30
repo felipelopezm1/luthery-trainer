@@ -3,7 +3,7 @@ name: CI
 on:
   workflow_call:
   push:
-    branches: [main]
+    branches: [main, ceci-branch]
   pull_request:
     branches: [main]
 
@@ -18,16 +18,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Check required deploy assets
         run: |
           test -f index.html
           test -f js/app.js
+          test -f js/sync.js
           test -f js/audio-engine.js
           test -f js/nothing-ui.js
           test -f css/nothing-ui.css
           test -f css/app.css
           test -f css/tokens.css
           test -f vercel.json
+          test -f api/progress.js
+          test -f package.json
           test -f fonts/open/Doto-ROND-wght.ttf
           test -f fonts/open/Geist-Regular.ttf
           echo "All static assets present."

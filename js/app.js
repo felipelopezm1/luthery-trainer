@@ -23,9 +23,15 @@ function nH() {
   };
 }
 function loadH() { try { return { ...nH(), ...JSON.parse(localStorage.getItem(HIST_KEY)) }; } catch { return nH(); } }
-function saveH() { try { localStorage.setItem(HIST_KEY, JSON.stringify(H)); } catch {} }
+function saveH(skipSync) {
+  try { localStorage.setItem(HIST_KEY, JSON.stringify(H)); } catch {}
+  if (!skipSync && window.BeleSync) window.BeleSync.schedulePush(() => H, () => state.level);
+}
 function loadLevel() { try { return localStorage.getItem(LEVEL_KEY) || 'medium'; } catch { return 'medium'; } }
-function saveLevel() { try { localStorage.setItem(LEVEL_KEY, state.level); } catch {} }
+function saveLevel(skipSync) {
+  try { localStorage.setItem(LEVEL_KEY, state.level); } catch {}
+  if (!skipSync && window.BeleSync) window.BeleSync.schedulePush(() => H, () => state.level);
+}
 let H = loadH();
 
 function logA(sec, ok, lbl) {
@@ -726,7 +732,30 @@ function renderHistorial() {
     <h4 class="sub">Por dificultad</h4>${lvlBars}
     <h4 class="sub">Actividad reciente</h4>
     <div class="log-list">${log || '<div class="log-item">Sin actividad aún</div>'}</div>
-    <button type="button" class="btn btn-outline reset-btn" data-action="reset-hist">Reiniciar historial</button>`;
+    <div class="sync-panel">
+      <h4 class="sub">Nube (Upstash)</h4>
+      <label class="sync-name"><span>Nombre</span>
+        <input type="text" id="sync-name" maxlength="64" placeholder="Opcional" value="${esc(window.BeleSync?.getName?.() || '')}">
+      </label>
+      <p class="sync-meta" id="sync-meta">Sincronizando…</p>
+      <div class="sync-actions">
+        <button type="button" class="btn btn-outline" data-action="sync-now">Sincronizar ahora</button>
+        <button type="button" class="btn btn-outline reset-btn" data-action="reset-hist">Reiniciar historial</button>
+      </div>
+    </div>`;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+function updSyncMeta() {
+  const el = document.getElementById('sync-meta');
+  if (!el || !window.BeleSync) return;
+  const st = window.BeleSync.getStatus();
+  const labels = { idle: 'Listo', syncing: 'Guardando…', ok: 'Guardado en la nube', err: 'Error al guardar', offline: 'Sin conexión' };
+  const uid = window.BeleSync.getUid();
+  el.textContent = `${labels[st] || st} · ID ${uid.slice(0, 8)}…`;
 }
 
 function render() {
@@ -773,6 +802,7 @@ function postRender() {
   if (isExercisePage() && cfg().timer > 0 && !state.session.interval && !state.session.answered) startTimer();
   updListenUI();
   syncAudioTarget();
+  if (state.mod === 'historial') updSyncMeta();
 }
 
 function btnValue(b) {
@@ -811,6 +841,14 @@ document.addEventListener('click', e => {
   if (e.target.closest('[data-action="start-err"]')) { startErr(); goPage(2); return; }
   if (e.target.closest('[data-action="start-teo"]')) { startTeo(); goPage(1); return; }
   if (e.target.closest('[data-action="reset-hist"]')) { H = nH(); saveH(); updSc(); render(); return; }
+  if (e.target.closest('[data-action="sync-now"]')) {
+    if (window.BeleSync) {
+      const nameEl = document.getElementById('sync-name');
+      if (nameEl) window.BeleSync.setName(nameEl.value);
+      window.BeleSync.push(H, state.level, window.BeleSync.getName()).then(() => updSyncMeta());
+    }
+    return;
+  }
 
   const play = e.target.closest('[data-play]');
   if (play && !play.disabled) {
@@ -889,9 +927,31 @@ document.querySelectorAll('.fab button').forEach(btn => {
 });
 
 window.addEventListener('resize', () => { if (isExercisePage()) postRender(); });
+document.addEventListener('bele:sync', updSyncMeta);
+document.addEventListener('change', e => {
+  if (e.target.id === 'sync-name' && window.BeleSync) {
+    window.BeleSync.setName(e.target.value);
+    window.BeleSync.schedulePush(() => H, () => state.level);
+  }
+});
 
-if (!H.byLevel) H.byLevel = { easy: { c: 0, t: 0 }, medium: { c: 0, t: 0 }, hard: { c: 0, t: 0 } };
-updSc();
-resetSession();
-render();
-if (window.TrainerAudio) window.TrainerAudio.init();
+(async function boot() {
+  if (!H.byLevel) H.byLevel = { easy: { c: 0, t: 0 }, medium: { c: 0, t: 0 }, hard: { c: 0, t: 0 } };
+  if (window.BeleSync) {
+    await window.BeleSync.initMerge(
+      () => H,
+      () => state.level,
+      (progress, level) => {
+        H = { ...nH(), ...progress };
+        if (level && LEVELS.includes(level)) state.level = level;
+        saveH(true);
+        saveLevel(true);
+      }
+    );
+  }
+  updSc();
+  resetSession();
+  render();
+  updSyncMeta();
+  if (window.TrainerAudio) window.TrainerAudio.init();
+})();
