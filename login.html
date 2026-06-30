@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acceso · BELE Laudería</title>
+  <link rel="stylesheet" href="css/nothing-ui.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="auth-body">
+<div class="auth-shell">
+  <div class="auth-top">
+    <div class="fab" role="group" aria-label="Idioma" data-i18n-aria="aria_lang">
+      <button type="button" data-lang-set="es" aria-pressed="true">ES</button>
+      <button type="button" data-lang-set="en" aria-pressed="false">EN</button>
+    </div>
+    <div class="fab" role="group" aria-label="Tema" data-i18n-aria="aria_theme">
+      <button type="button" data-theme-set="dark" aria-pressed="false">DARK</button>
+      <button type="button" data-theme-set="light" aria-pressed="true">LIGHT</button>
+    </div>
+  </div>
+
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="brand-mark" data-i18n="brand">ENTRENADOR · BELE</div>
+      <h1 class="auth-title" data-i18n="auth_title">Entrenador Musical</h1>
+      <p class="auth-lead" data-i18n="auth_lead">Inicia sesión para guardar tu progreso en la nube.</p>
+    </div>
+
+    <div class="auth-tabs" role="tablist">
+      <button type="button" class="auth-tab on" data-auth-tab="login" role="tab" aria-selected="true" data-i18n="auth_tab_login">Entrar</button>
+      <button type="button" class="auth-tab" data-auth-tab="signup" role="tab" aria-selected="false" data-i18n="auth_tab_signup">Crear cuenta</button>
+    </div>
+
+    <form class="auth-form" id="auth-form-login" data-auth-form="login">
+      <label class="auth-field">
+        <span data-i18n="auth_email">Correo</span>
+        <input type="email" name="email" autocomplete="email" required data-i18n-placeholder="auth_email_ph" placeholder="tu@correo.com">
+      </label>
+      <label class="auth-field">
+        <span data-i18n="auth_password">Contraseña</span>
+        <input type="password" name="password" autocomplete="current-password" required minlength="8" data-i18n-placeholder="auth_password_ph" placeholder="Mínimo 8 caracteres">
+      </label>
+      <p class="auth-error" id="auth-error-login" hidden></p>
+      <button type="submit" class="btn primary auth-submit" data-i18n="auth_submit_login">Entrar</button>
+    </form>
+
+    <form class="auth-form hidden" id="auth-form-signup" data-auth-form="signup">
+      <label class="auth-field">
+        <span data-i18n="auth_name">Nombre</span>
+        <input type="text" name="name" autocomplete="name" required maxlength="64" data-i18n-placeholder="auth_name_ph" placeholder="Tu nombre">
+      </label>
+      <label class="auth-field">
+        <span data-i18n="auth_email">Correo</span>
+        <input type="email" name="email" autocomplete="email" required data-i18n-placeholder="auth_email_ph" placeholder="tu@correo.com">
+      </label>
+      <label class="auth-field">
+        <span data-i18n="auth_password">Contraseña</span>
+        <input type="password" name="password" autocomplete="new-password" required minlength="8" data-i18n-placeholder="auth_password_ph" placeholder="Mínimo 8 caracteres">
+      </label>
+      <p class="auth-error" id="auth-error-signup" hidden></p>
+      <button type="submit" class="btn primary auth-submit" data-i18n="auth_submit_signup">Crear cuenta</button>
+    </form>
+
+    <p class="auth-note" data-i18n="auth_sync_note">Progreso sincronizado con Upstash Redis.</p>
+  </div>
+</div>
+
+<script src="js/i18n.js"></script>
+<script src="js/auth.js"></script>
+<script>
+(function () {
+  const params = new URLSearchParams(location.search);
+  const next = params.get('next') || 'index.html';
+  let mode = 'login';
+
+  function authErr(code) {
+    const map = {
+      'invalid email': 'auth_err_invalid_email',
+      'password too short': 'auth_err_password_too_short',
+      'name required': 'auth_err_name_required',
+      'email taken': 'auth_err_email_taken',
+      'invalid credentials': 'auth_err_invalid_credentials',
+    };
+    return t(map[code] || 'auth_err_generic');
+  }
+
+  function setMode(tab) {
+    mode = tab;
+    document.querySelectorAll('.auth-tab').forEach(b => {
+      const on = b.dataset.authTab === tab;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    document.getElementById('auth-form-login').classList.toggle('hidden', tab !== 'login');
+    document.getElementById('auth-form-signup').classList.toggle('hidden', tab !== 'signup');
+  }
+
+  function showError(form, msg) {
+    const el = document.getElementById(form === 'signup' ? 'auth-error-signup' : 'auth-error-login');
+    if (!el) return;
+    el.textContent = msg;
+    el.hidden = !msg;
+  }
+
+  async function redirectIfAuthed() {
+    if (!window.BeleAuth?.isLoggedIn()) return;
+    await window.BeleAuth.fetchMe();
+    if (window.BeleAuth.isLoggedIn()) location.href = next;
+  }
+
+  document.querySelectorAll('.auth-tab').forEach(b => {
+    b.addEventListener('click', () => setMode(b.dataset.authTab));
+  });
+
+  document.getElementById('auth-form-login').addEventListener('submit', async e => {
+    e.preventDefault();
+    showError('login', '');
+    const fd = new FormData(e.target);
+    const btn = e.target.querySelector('[type=submit]');
+    btn.disabled = true;
+    btn.textContent = t('auth_loading');
+    try {
+      await window.BeleAuth.login(fd.get('email'), fd.get('password'));
+      location.href = next;
+    } catch (err) {
+      showError('login', authErr(err.message));
+      btn.disabled = false;
+      btn.textContent = t('auth_submit_login');
+    }
+  });
+
+  document.getElementById('auth-form-signup').addEventListener('submit', async e => {
+    e.preventDefault();
+    showError('signup', '');
+    const fd = new FormData(e.target);
+    const btn = e.target.querySelector('[type=submit]');
+    btn.disabled = true;
+    btn.textContent = t('auth_loading');
+    try {
+      await window.BeleAuth.signup(fd.get('name'), fd.get('email'), fd.get('password'));
+      location.href = next;
+    } catch (err) {
+      showError('signup', authErr(err.message));
+      btn.disabled = false;
+      btn.textContent = t('auth_submit_signup');
+    }
+  });
+
+  document.addEventListener('click', e => {
+    const lang = e.target.closest('[data-lang-set]');
+    if (lang) { setLang(lang.dataset.langSet); document.title = t('auth_page_title'); return; }
+    const theme = e.target.closest('[data-theme-set]');
+    if (theme) { setTheme(theme.dataset.themeSet); return; }
+  });
+
+  setTheme(loadTheme());
+  applyChromeI18n();
+  document.title = t('auth_page_title');
+  redirectIfAuthed();
+})();
+</script>
+</body>
+</html>

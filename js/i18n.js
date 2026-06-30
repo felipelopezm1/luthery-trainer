@@ -122,6 +122,22 @@ const I18N = {
     pg_new: 'Nueva sesión', pg_saved: 'Guardado', pg_no_saves: 'Aún no hay sesiones.',
     pg_notes: 'notas', pg_delete: 'Eliminar', pg_ready: 'Listo', pg_recording: 'Grabando pista {n}',
     pg_playing: 'Reproduciendo…', pg_pane: 'Playground',
+    auth_page_title: 'Acceso · BELE Laudería',
+    auth_title: 'Entrenador Musical',
+    auth_lead: 'Inicia sesión para guardar tu progreso en la nube.',
+    auth_tab_login: 'Entrar', auth_tab_signup: 'Crear cuenta',
+    auth_name: 'Nombre', auth_email: 'Correo', auth_password: 'Contraseña',
+    auth_name_ph: 'Tu nombre', auth_email_ph: 'tu@correo.com', auth_password_ph: 'Mínimo 8 caracteres',
+    auth_submit_login: 'Entrar', auth_submit_signup: 'Crear cuenta',
+    auth_sign_in: 'Entrar', auth_sign_out: 'Salir',
+    auth_loading: 'Conectando…',
+    auth_err_invalid_email: 'Correo no válido.',
+    auth_err_password_too_short: 'La contraseña debe tener al menos 8 caracteres.',
+    auth_err_name_required: 'Indica tu nombre.',
+    auth_err_email_taken: 'Ese correo ya está registrado.',
+    auth_err_invalid_credentials: 'Correo o contraseña incorrectos.',
+    auth_err_generic: 'No se pudo completar. Inténtalo de nuevo.',
+    auth_sync_note: 'Progreso sincronizado con Upstash Redis.',
   },
   en: {
     brand: 'BELE TRAINER',
@@ -245,6 +261,22 @@ const I18N = {
     pg_new: 'New session', pg_saved: 'Saved', pg_no_saves: 'No sessions yet.',
     pg_notes: 'notes', pg_delete: 'Delete', pg_ready: 'Ready', pg_recording: 'Recording track {n}',
     pg_playing: 'Playing…', pg_pane: 'Playground',
+    auth_page_title: 'Sign in · BELE Laudería',
+    auth_title: 'Music Trainer',
+    auth_lead: 'Sign in to save your progress to the cloud.',
+    auth_tab_login: 'Sign in', auth_tab_signup: 'Sign up',
+    auth_name: 'Name', auth_email: 'Email', auth_password: 'Password',
+    auth_name_ph: 'Your name', auth_email_ph: 'you@email.com', auth_password_ph: 'At least 8 characters',
+    auth_submit_login: 'Sign in', auth_submit_signup: 'Create account',
+    auth_sign_in: 'Sign in', auth_sign_out: 'Sign out',
+    auth_loading: 'Connecting…',
+    auth_err_invalid_email: 'Invalid email address.',
+    auth_err_password_too_short: 'Password must be at least 8 characters.',
+    auth_err_name_required: 'Name is required.',
+    auth_err_email_taken: 'That email is already registered.',
+    auth_err_invalid_credentials: 'Incorrect email or password.',
+    auth_err_generic: 'Something went wrong. Try again.',
+    auth_sync_note: 'Progress synced via Upstash Redis.',
   },
 };
 
@@ -396,6 +428,7 @@ function applyChromeI18n() {
     if (k) { b.title = t(k); b.setAttribute('aria-label', t(k)); }
   });
   updScoreLabels();
+  if (window.BeleAuth?.updateUserChip) window.BeleAuth.updateUserChip();
   if (typeof updateFocusButtons === 'function') updateFocusButtons();
   if (typeof updateFocusTitle === 'function') updateFocusTitle();
 }

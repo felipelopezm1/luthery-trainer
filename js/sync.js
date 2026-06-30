@@ -6,7 +6,14 @@
   let syncTimer = null;
   let status = 'idle';
 
+  function authHeaders(extra) {
+    if (window.BeleAuth?.authHeaders) return window.BeleAuth.authHeaders(extra);
+    return { ...(extra || {}) };
+  }
+
   function getUid() {
+    const authId = window.BeleAuth?.getUserId?.();
+    if (authId) return authId;
     let uid = localStorage.getItem(UID_KEY);
     if (!uid) {
       uid = crypto.randomUUID();
@@ -16,6 +23,8 @@
   }
 
   function getName() {
+    const authUser = window.BeleAuth?.getUser?.();
+    if (authUser?.name) return authUser.name;
     return localStorage.getItem(NAME_KEY) || '';
   }
 
@@ -45,8 +54,21 @@
       emitStatus();
       return null;
     }
+    if (window.BeleAuth && !window.BeleAuth.isLoggedIn()) {
+      status = 'idle';
+      emitStatus();
+      return null;
+    }
     try {
-      const r = await fetch(`/api/progress?uid=${encodeURIComponent(getUid())}`);
+      const qs = window.BeleAuth?.isLoggedIn?.()
+        ? ''
+        : `?uid=${encodeURIComponent(getUid())}`;
+      const r = await fetch(`/api/progress${qs}`, { headers: authHeaders() });
+      if (r.status === 401) {
+        status = 'idle';
+        emitStatus();
+        return null;
+      }
       if (!r.ok) throw new Error('pull failed');
       status = 'ok';
       emitStatus();
@@ -64,19 +86,30 @@
       emitStatus();
       return false;
     }
+    if (window.BeleAuth && !window.BeleAuth.isLoggedIn()) {
+      status = 'idle';
+      emitStatus();
+      return false;
+    }
     status = 'syncing';
     emitStatus();
     try {
+      const body = {
+        progress,
+        level,
+        name: name ?? getName(),
+      };
+      if (!window.BeleAuth?.isLoggedIn?.()) body.uid = getUid();
       const r = await fetch('/api/progress', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uid: getUid(),
-          progress,
-          level,
-          name: name ?? getName(),
-        }),
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(body),
       });
+      if (r.status === 401) {
+        status = 'idle';
+        emitStatus();
+        return false;
+      }
       if (!r.ok) throw new Error('push failed');
       const data = await r.json();
       if (data.updatedAt) setSyncTs(data.updatedAt);
@@ -91,6 +124,7 @@
   }
 
   function schedulePush(getProgress, getLevel) {
+    if (window.BeleAuth && !window.BeleAuth.isLoggedIn()) return;
     clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {
       push(getProgress(), getLevel(), getName());
@@ -98,6 +132,7 @@
   }
 
   async function initMerge(getProgress, getLevel, applyRemote) {
+    if (window.BeleAuth && !window.BeleAuth.isLoggedIn()) return;
     const remote = await pull();
     const local = getProgress();
     const localTs = getSyncTs();

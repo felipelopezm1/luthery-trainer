@@ -1,31 +1,32 @@
 const { Redis } = require('@upstash/redis');
+const {
+  send, handleOptions, bearerToken, getSession, validAnonUid,
+} = require('./_lib/auth');
 
 const redis = Redis.fromEnv();
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-function send(res, status, body) {
-  Object.entries(cors).forEach(([k, v]) => res.setHeader(k, v));
-  res.setHeader('Content-Type', 'application/json');
-  return res.status(status).json(body);
-}
-
-function validUid(uid) {
-  return typeof uid === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uid);
+async function resolveUid(req) {
+  const token = bearerToken(req);
+  if (token) {
+    const session = await getSession(token);
+    if (session?.userId) return session.userId;
+  }
+  const uid = req.method === 'GET' ? req.query.uid : req.body?.uid;
+  if (validAnonUid(uid)) return uid;
+  return null;
 }
 
 module.exports = async function handler(req, res) {
-  if (req.method === 'OPTIONS') {
-    Object.entries(cors).forEach(([k, v]) => res.setHeader(k, v));
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return handleOptions(res);
 
-  const uid = req.method === 'GET' ? req.query.uid : req.body?.uid;
-  if (!validUid(uid)) return send(res, 400, { error: 'invalid uid' });
+  const uid = await resolveUid(req);
+  if (!uid) return send(res, 401, { error: 'unauthorized' });
 
   const progressKey = `bele:progress:${uid}`;
   const userKey = `bele:user:${uid}`;
@@ -33,7 +34,7 @@ module.exports = async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const [progress, user] = await redis.mget(progressKey, userKey);
-      return send(res, 200, { progress, user });
+      return send(res, 200, { progress, user, uid });
     }
 
     if (req.method === 'PUT') {
@@ -55,7 +56,7 @@ module.exports = async function handler(req, res) {
       }
       await redis.set(userKey, userPayload);
 
-      return send(res, 200, { ok: true, updatedAt });
+      return send(res, 200, { ok: true, updatedAt, uid });
     }
 
     if (req.method === 'DELETE') {

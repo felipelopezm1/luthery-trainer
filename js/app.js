@@ -861,8 +861,10 @@ function updSyncMeta() {
   if (!el || !window.BeleSync) return;
   const st = window.BeleSync.getStatus();
   const labels = { idle: t('sync_idle'), syncing: t('sync_syncing'), ok: t('sync_ok'), err: t('sync_err'), offline: t('sync_offline') };
+  const user = window.BeleAuth?.getUser?.();
   const uid = window.BeleSync.getUid();
-  el.textContent = `${labels[st] || st} · ID ${uid.slice(0, 8)}…`;
+  const who = user?.name || user?.email?.split('@')[0] || uid.slice(0, 8);
+  el.textContent = `${labels[st] || st} · ${who}…`;
 }
 window.updSyncMeta = updSyncMeta;
 
@@ -969,6 +971,10 @@ document.addEventListener('click', e => {
     return;
   }
   if (e.target.closest('[data-action="reset-hist"]')) { H = nH(); saveH(); updSc(); render(); return; }
+  if (e.target.closest('#auth-logout')) {
+    if (window.BeleAuth) window.BeleAuth.logout().then(() => { location.href = 'login.html'; });
+    return;
+  }
   if (e.target.closest('[data-action="sync-now"]')) {
     if (window.BeleSync) {
       const nameEl = document.getElementById('sync-name');
@@ -1178,6 +1184,11 @@ document.addEventListener('click', e => {
   if (!H.byLevel) H.byLevel = { easy: { c: 0, t: 0 }, medium: { c: 0, t: 0 }, hard: { c: 0, t: 0 } };
   setTheme(loadTheme());
   applyChromeI18n();
+  if (window.BeleAuth) {
+    await window.BeleAuth.fetchMe();
+    if (!window.BeleAuth.requireAuth()) return;
+    window.BeleAuth.updateUserChip();
+  }
   if (window.BeleSync) {
     await window.BeleSync.initMerge(
       () => H,
