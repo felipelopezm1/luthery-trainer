@@ -92,6 +92,7 @@ function timeoutAnswer() {
     if (String(btnValue(b)) === String(b.dataset.correct)) b.classList.add('correct');
   });
   document.querySelectorAll('[data-nav="next"]').forEach(b => b.disabled = false);
+  if (state.mod === 'ritmo') rhythmVexReveal(true);
 }
 
 function useListen() {
@@ -192,11 +193,12 @@ function drawSingleNote(el, key, acc, highlight) {
   new Formatter().joinVoices([voice]).format([voice], w - 50);
   voice.draw(ctx, stave);
 }
-function drawRhythmVex(el, durs, ts) {
+function drawRhythmVex(el, durs, ts, revealTs = false) {
   const w = vexW(), h = 115;
   const r = makeRenderer(el, w, h);
   const ctx = r.getContext();
-  const stave = new Stave(8, 8, w - 20).addClef('treble').addTimeSignature(ts);
+  const stave = new Stave(8, 8, w - 20).addClef('treble');
+  if (revealTs) stave.addTimeSignature(ts);
   stave.setContext(ctx).draw();
   const notes = durs.map(d => {
     const dot = d.endsWith('d');
@@ -210,6 +212,15 @@ function drawRhythmVex(el, durs, ts) {
   voice.addTickables(notes);
   try { new Formatter().joinVoices([voice]).format([voice], w - 90); } catch {}
   voice.draw(ctx, stave);
+}
+
+function rhythmVexReveal(reveal) {
+  const wrap = document.getElementById('vex-rt-wrap');
+  const el = document.getElementById('vex-rt');
+  const r = state.rt.series[state.page - 2];
+  if (!el || !r) return;
+  if (wrap) wrap.classList.toggle('revealed', reveal);
+  drawRhythmVex(el, r.dur, r.ts, reveal);
 }
 function drawMelodyVex(el, notes) {
   const w = vexW(), h = 130;
@@ -560,8 +571,15 @@ function renderRitmo() {
   const options = tsDistractors(r.label);
   return `${moduleHeader('Secuencia 02 · Ritmo', '', total)}
     <h1 class="page-title">¿Qué compás es?</h1>
+    <p class="exercise-hint">El compás no se muestra — identifícalo escuchando el patrón.</p>
     <div class="exercise-panel">
-      <div class="vex-host" id="vex-rt"></div>
+      <div class="vex-host vex-rt-mask${state.session.answered ? ' revealed' : ''}" id="vex-rt-wrap">
+        <div id="vex-rt"></div>
+        <div class="vex-aural-mask" aria-hidden="true">
+          <span class="vex-aural-label">?/?</span>
+          <span class="vex-aural-hint">Escucha</span>
+        </div>
+      </div>
       <div class="audio-row">
         <button type="button" class="btn btn-outline" data-play="rt" ${canListen() ? '' : 'disabled'}><svg class="ico sm"><use href="#i-play"/></svg> Escuchar patrón</button>
         <button type="button" class="btn btn-outline" data-play="rt-fast" ${canListen() ? '' : 'disabled'}>Pulso rápido</button>
@@ -800,8 +818,7 @@ function postRender() {
   const { mod, page } = state;
   if (mod === 'ritmo' && page >= 2 && state.rt.series[page - 2]) {
     const r = state.rt.series[page - 2];
-    const el = document.getElementById('vex-rt');
-    if (el) drawRhythmVex(el, r.dur, r.ts);
+    rhythmVexReveal(state.session.answered);
   }
   if (mod === 'errores' && page >= 2 && state.err.series[page - 2]) {
     drawMelodyVex(document.getElementById('vex-err'), state.err.series[page - 2].written);
@@ -833,6 +850,7 @@ function bindFeedback(btn, fbId, ok, msgOk, msgNo, sec, lbl) {
   if (fb) { fb.className = 'feedback show ' + (ok ? 'ok' : 'no'); fb.textContent = ok ? msgOk : msgNo; }
   if (sec) logA(sec, ok, lbl);
   document.querySelectorAll('[data-nav="next"]').forEach(b => b.disabled = false);
+  if (sec === 'rt') rhythmVexReveal(true);
 }
 
 document.addEventListener('click', e => {
