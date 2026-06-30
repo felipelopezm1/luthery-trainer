@@ -33,9 +33,11 @@ const TrainerAudio = (() => {
   };
 
   function midiToLabel(m) {
-    const pc = ((m % 12) + 12) % 12;
-    const oct = Math.floor(m / 12) - 1;
-    return `${NOTE_NAMES[pc]}${oct}`;
+    return typeof window.midiLabel === 'function' ? window.midiLabel(m) : (() => {
+      const pc = ((m % 12) + 12) % 12;
+      const oct = Math.floor(m / 12) - 1;
+      return `${NOTE_NAMES[pc]}${oct}`;
+    })();
   }
 
   function ensureCtx() {
@@ -67,11 +69,11 @@ const TrainerAudio = (() => {
           destination: master,
         });
         localStorage.setItem(INSTR_KEY, id);
-        setInstrStatus(`${def.label} listo`);
+        setInstrStatus(t('instr_ready', { n: instrLabel(id) }));
       } catch (e) {
         console.warn('Soundfont load failed', def.sf, e);
         instrument = null;
-        setInstrStatus('Error al cargar · pulso sintético');
+        setInstrStatus(t('instr_fail'));
       } finally {
         loading = false;
         loadPromise = null;
@@ -133,6 +135,12 @@ const TrainerAudio = (() => {
     playMidis(midis, block ? 0 : 0.12, block ? 1.6 : 1.3, block);
   }
 
+  let userNoteHook = null;
+
+  function setUserNoteHook(fn) {
+    userNoteHook = typeof fn === 'function' ? fn : null;
+  }
+
   /* ── target & comparison ── */
   function setTarget(t) {
     target = t;
@@ -150,13 +158,13 @@ const TrainerAudio = (() => {
     if (!target) return;
     lastUser = userMidi;
     if (target.type === 'note') {
-      const t = target.midis[0];
-      const ok = userMidi === t || (target.pitchClass === true && (userMidi % 12) === (t % 12));
+      const tNote = target.midis[0];
+      const ok = userMidi === tNote || (target.pitchClass === true && (userMidi % 12) === (tNote % 12));
       compareResult = {
         ok,
         msg: ok
-          ? `✓ ${midiToLabel(userMidi)} coincide con ${target.label || midiToLabel(t)}`
-          : `✗ ${midiToLabel(userMidi)} · objetivo ${target.label || midiToLabel(t)}`
+          ? t('compare_match', { n: midiToLabel(userMidi), t: target.label || midiToLabel(tNote) })
+          : t('compare_miss', { n: midiToLabel(userMidi), t: target.label || midiToLabel(tNote) })
       };
     } else if (target.type === 'chord') {
       const pcs = target.midis.map(m => m % 12);
@@ -164,11 +172,11 @@ const TrainerAudio = (() => {
       compareResult = {
         ok,
         msg: ok
-          ? `✓ ${midiToLabel(userMidi)} pertenece al acorde ${target.chordName || ''}`
-          : `✗ ${midiToLabel(userMidi)} no está en ${target.chordName || 'el acorde'}`
+          ? t('compare_chord_ok', { n: midiToLabel(userMidi), c: chordName(target.chordName || '') })
+          : t('compare_chord_no', { n: midiToLabel(userMidi), c: chordName(target.chordName || '') || t('sec_ac') })
       };
     } else if (target.type === 'melody') {
-      compareResult = { ok: null, msg: `Entrada: ${midiToLabel(userMidi)} · sigue la melodía en partitura` };
+      compareResult = { ok: null, msg: t('compare_melody', { n: midiToLabel(userMidi) }) };
     }
     updateCompareUI();
     flashKey(userMidi, compareResult.ok ? 'match' : 'miss');
@@ -197,13 +205,13 @@ const TrainerAudio = (() => {
     activeInput = input;
     input.onmidimessage = onMidi;
     localStorage.setItem(MIDI_DEV_KEY, input.id);
-    setMidiStatus(`MIDI · ${input.name || input.id}`);
+    setMidiStatus(t('midi_connected', { n: input.name || input.id }));
     renderMidiSelect();
   }
 
   async function connectMidi() {
     if (!navigator.requestMIDIAccess) {
-      setMidiStatus('Web MIDI no soportado (usa Chrome/Edge)');
+      setMidiStatus(t('midi_no_support'));
       return false;
     }
     try {
@@ -214,7 +222,7 @@ const TrainerAudio = (() => {
       bindMidiInputs();
       return !!activeInput;
     } catch (e) {
-      setMidiStatus('Permiso MIDI denegado — pulsa MIDI o toca la página');
+      setMidiStatus(t('midi_denied'));
       return false;
     }
   }
@@ -226,10 +234,10 @@ const TrainerAudio = (() => {
       attachInput(pickMidiInput(inputs));
     } else {
       activeInput.onmidimessage = onMidi;
-      setMidiStatus(`MIDI · ${activeInput.name || activeInput.id}`);
+      setMidiStatus(t('midi_connected', { n: activeInput.name || activeInput.id }));
       renderMidiSelect();
     }
-    if (!inputs.length) setMidiStatus('Sin controlador · conecta LPK25 y espera…');
+    if (!inputs.length) setMidiStatus(t('midi_waiting'));
   }
 
   function onMidi(e) {
@@ -240,7 +248,7 @@ const TrainerAudio = (() => {
     if ((cmd === 0x90 && v > 0) || (cmd === 0x80)) {
       if (cmd === 0x90) {
         playUserNote(n, v / 127);
-        compareNote(n);
+        if (!userNoteHook && target) compareNote(n);
       } else {
         releaseUserNote(n);
       }
@@ -254,11 +262,13 @@ const TrainerAudio = (() => {
     else oscPlay(m, 1.2, 0, gain * 0.5);
     pulseViz();
     drawKeyboard();
+    if (userNoteHook) userNoteHook(true, m, gain);
   }
 
   function releaseUserNote(m) {
     activeNotes.delete(m);
     drawKeyboard();
+    if (userNoteHook) userNoteHook(false, m, 0);
   }
 
   function setMidiStatus(txt) {
@@ -273,7 +283,7 @@ const TrainerAudio = (() => {
     const inputs = listMidiInputs();
     if (!inputs.length) {
       const o = document.createElement('option');
-      o.textContent = midiAccess ? 'Ningún dispositivo' : '—';
+      o.textContent = midiAccess ? t('midi_none') : '—';
       sel.appendChild(o);
       return;
     }
@@ -470,11 +480,11 @@ const TrainerAudio = (() => {
     if (!target) {
       tgt.textContent = '—';
       if (usr) usr.textContent = '—';
-      if (res) { res.textContent = 'Selecciona un ejercicio con audio'; res.className = 'compare-result'; }
+      if (res) { res.textContent = t('compare_pick'); res.className = 'compare-result'; }
       return;
     }
     tgt.textContent = target.label || target.midis.map(midiToLabel).join(' · ');
-    if (usr) usr.textContent = lastUser != null ? midiToLabel(lastUser) : 'Toca en LPK25 o escucha';
+    if (usr) usr.textContent = lastUser != null ? midiToLabel(lastUser) : t('compare_play');
     if (res && compareResult) {
       res.textContent = compareResult.msg;
       res.className = 'compare-result ' + (compareResult.ok ? 'ok' : compareResult.ok === false ? 'no' : '');
@@ -492,7 +502,8 @@ const TrainerAudio = (() => {
     wrap.innerHTML = INSTRUMENTS.map(i => {
       const on = currentId === i.id;
       const busy = on && loading;
-      return `<button type="button" class="chip ${on ? 'on' : ''}${busy ? ' loading' : ''}" data-instr="${i.id}" ${loading ? 'disabled' : ''} aria-busy="${busy}">${i.label}${busy ? '…' : ''}</button>`;
+      const lbl = typeof instrLabel === 'function' ? instrLabel(i.id) : i.label;
+      return `<button type="button" class="chip ${on ? 'on' : ''}${busy ? ' loading' : ''}" data-instr="${i.id}" ${loading ? 'disabled' : ''} aria-busy="${busy}">${lbl}${busy ? '…' : ''}</button>`;
     }).join('');
   }
 
@@ -503,7 +514,7 @@ const TrainerAudio = (() => {
     startVizLoop();
     renderMidiSelect();
     const def = INSTRUMENTS.find(i => i.id === currentId) || INSTRUMENTS[0];
-    setInstrStatus(`Cargando ${def.label}…`);
+    setInstrStatus(t('instr_loading', { n: instrLabel(def.id) }));
     loadInstrument(currentId);
     connectMidi();
     syncMetroUI();
@@ -526,7 +537,7 @@ const TrainerAudio = (() => {
       if (!k) return;
       const m = +k.dataset.midi;
       playUserNote(m);
-      if (target) compareNote(m);
+      if (target && !userNoteHook) compareNote(m);
     });
     document.getElementById('metro-toggle')?.addEventListener('click', () => {
       ensureCtx();
@@ -537,10 +548,19 @@ const TrainerAudio = (() => {
     });
   }
 
+  function onLangChange() {
+    renderInstruments();
+    updateCompareUI();
+    renderMidiSelect();
+    if (activeInput) setMidiStatus(t('midi_connected', { n: activeInput.name || activeInput.id }));
+    else if (!midiAccess) setMidiStatus(t('midi_prompt'));
+  }
+
   return {
     init() { ensureCtx(); bindUI(); initPanel(); },
     playMidi, playMidis, playMelody, playChord, playFreq,
     setTarget, clearTarget, compareNote,
+    setUserNoteHook,
     connectMidi, midiToLabel,
     getInstrumentId: () => currentId,
     getInstruments: () => INSTRUMENTS,
@@ -550,6 +570,7 @@ const TrainerAudio = (() => {
     toggleMetro,
     setMetroBpm,
     isMetroRunning: () => metro.running,
+    onLangChange,
   };
 })();
 

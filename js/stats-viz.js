@@ -280,26 +280,29 @@ const StatsViz = (() => {
   function renderKPIs(data, ctx, sec, lvl) {
     const el = document.getElementById('util-kpis');
     if (!el) return;
+    const T = window.t || (k => k);
     const logs = filterLog(data.log, sec, lvl);
     const total = logs.length;
     const acc = pct(logs.filter(x => x.ok).length, total);
     const sess = sessions(data.log);
     const imp = improvement(data.log, sec);
     const mod = ctx.mod;
-    const title = sec ? `${MOD_LABEL[mod] || 'Sección'} · ${DIFF[lvl]}` : 'Panel general';
+    const modLabel = sec ? T('sec_' + (MOD_SEC[mod] || 'rt')) : T('util_general');
+    const diffLabel = sec ? T('diff_' + lvl) : '';
+    const title = sec ? `${modLabel} · ${diffLabel}` : T('util_general');
     const impTxt = imp == null ? '—' : `${imp >= 0 ? '+' : ''}${imp}%`;
 
     el.innerHTML = `
-      <div class="util-kpi"><span class="k">Precisión</span><b>${total ? acc + '%' : '—'}</b></div>
-      <div class="util-kpi"><span class="k">Respuestas</span><b>${total}</b></div>
-      <div class="util-kpi"><span class="k">Sesiones</span><b>${sess.length || 0}</b></div>
-      <div class="util-kpi"><span class="k">Mejora</span><b class="${imp > 0 ? 'up' : imp < 0 ? 'dn' : ''}">${impTxt}</b></div>`;
+      <div class="util-kpi"><span class="k">${T('util_kpi_acc')}</span><b>${total ? acc + '%' : '—'}</b></div>
+      <div class="util-kpi"><span class="k">${T('util_kpi_ans')}</span><b>${total}</b></div>
+      <div class="util-kpi"><span class="k">${T('util_kpi_sess')}</span><b>${sess.length || 0}</b></div>
+      <div class="util-kpi"><span class="k">${T('util_kpi_imp')}</span><b class="${imp > 0 ? 'up' : imp < 0 ? 'dn' : ''}">${impTxt}</b></div>`;
 
     const cap = document.getElementById('util-caption');
     if (cap) {
       cap.textContent = sec
-        ? `Uso en ${MOD_LABEL[mod]} (${DIFF[lvl]}) · racha ${data.streak} · mejor ${data.best}`
-        : `Utilización global · ${data.log.length} eventos registrados`;
+        ? T('util_usage_sec', { mod: T('sec_' + MOD_SEC[mod]), diff: diffLabel, s: data.streak, b: data.best })
+        : T('util_usage_global', { n: data.log.length });
     }
     const head = document.getElementById('util-context-label');
     if (head) head.textContent = title;

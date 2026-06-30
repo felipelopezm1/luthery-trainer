@@ -98,8 +98,7 @@ function timeoutAnswer() {
   });
   document.querySelectorAll('[data-nav="next"]').forEach(b => b.disabled = false);
   if (state.mod === 'ritmo') rhythmVexReveal(true);
-  const m = moduleMeta(state.mod);
-  if (state.page === m.results - 1) setTimeout(() => goPage(m.results), 700);
+  maybeAdvanceRun();
 }
 
 function useListen() {
@@ -114,6 +113,23 @@ function updListenUI() {
   if (max < 99 && state.session.listens >= max) {
     document.querySelectorAll('[data-play]').forEach(b => { b.disabled = true; });
   }
+}
+
+let advanceTimer = null;
+
+function clearAdvanceTimer() {
+  if (advanceTimer) { clearTimeout(advanceTimer); advanceTimer = null; }
+}
+
+function maybeAdvanceRun() {
+  const m = moduleMeta(state.mod);
+  if (!isExercisePage()) return;
+  clearAdvanceTimer();
+  const targetPage = state.page;
+  advanceTimer = setTimeout(() => {
+    advanceTimer = null;
+    goPage(targetPage === m.results - 1 ? m.results : targetPage + 1);
+  }, 700);
 }
 
 function canListen() { return cfg().listens >= 99 || state.session.listens < cfg().listens; }
@@ -131,6 +147,11 @@ function keyToMidi(key) {
   const base = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 }[m[1]];
   let semi = base + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0);
   return (parseInt(m[3], 10) + 1) * 12 + semi;
+}
+function midiToVexKey(m) {
+  const oct = Math.floor(m / 12) - 1;
+  const chrom = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'];
+  return `${chrom[((m % 12) + 12) % 12]}/${oct}`;
 }
 function playNote(freq, start, dur, vol = 0.4, type = 'triangle') {
   if (window.TrainerAudio) {
@@ -208,11 +229,8 @@ function drawRhythmVex(el, durs, ts, revealTs = false) {
   if (revealTs) stave.addTimeSignature(ts);
   stave.setContext(ctx).draw();
   const notes = durs.map(d => {
-    const dot = d.endsWith('d');
-    const base = dot ? d.slice(0, -1) : d;
-    const sn = new StaveNote({ clef: 'treble', keys: ['b/4'], duration: base, stem_direction: 1 });
-    if (dot) sn.addDotToAll();
-    return sn;
+    const base = d.endsWith('d') ? d.slice(0, -1) : d;
+    return new StaveNote({ clef: 'treble', keys: ['b/4'], duration: base, stem_direction: 1 });
   });
   const [nb, bv] = ts.split('/').map(Number);
   const voice = new Voice({ num_beats: nb, beat_value: bv }).setStrict(false);
@@ -227,7 +245,7 @@ function rhythmVexReveal(reveal) {
   const r = state.rt.series[exerciseIndex()];
   if (!el || !r) return;
   if (wrap) wrap.classList.toggle('revealed', reveal);
-  drawRhythmVex(el, r.dur, r.ts, reveal);
+  try { drawRhythmVex(el, r.dur, r.ts, reveal); } catch (e) { el.innerHTML = ''; }
 }
 function drawMelodyVex(el, notes) {
   const w = vexW(), h = 130;
@@ -322,21 +340,13 @@ function genErrExercise(len, level) {
   const written = [], played = [];
   steps.forEach(s => {
     midi = Math.max(48, Math.min(84, midi + s - 2));
-    const oct = Math.floor(midi / 12) - 1;
-    const pc = midi % 12;
-    const letters = ['c','d','e','f','g','a','b'];
-    const map = [0,2,4,5,7,9,11];
-    const li = map.indexOf(pc);
-    written.push({ key: `${letters[li]}/${oct}`, dur: '8' });
+    written.push({ key: midiToVexKey(midi), dur: '8' });
     played.push(midi);
   });
   const errIdx = 1 + Math.floor(Math.random() * (len - 2));
   const semi = level === 'easy' ? (Math.random() < 0.5 ? -2 : 2) : (Math.random() < 0.5 ? -1 : 1);
   played[errIdx] = Math.max(48, Math.min(84, played[errIdx] + semi));
-  const wName = noteByMidi(written[errIdx].key);
-  const pName = noteByMidi(played[errIdx]);
-  const errDesc = `${wName?.name || '?'} → ${pName?.name || '?'} (${semi === -1 ? '♭' : semi === 1 ? '♯' : semi + ' semitonos'})`;
-  return { written, played, errIdx, errDesc };
+  return { written, played, errIdx, semi, errDesc: '' };
 }
 function noteByMidi(key) {
   return NOTES_ALL.find(n => n.key === key) || { name: key, key, midi: keyToMidi(key) };
@@ -429,6 +439,7 @@ function renderRunResults() {
 }
 
 function goPage(n) {
+  clearAdvanceTimer();
   const max = pageCount(state.mod) - 1;
   if (n > state.page && isExercisePage() && !state.session.answered) return;
   state.page = Math.max(0, Math.min(n, max));
@@ -437,6 +448,8 @@ function goPage(n) {
 }
 
 function setMod(mod) {
+  clearAdvanceTimer();
+  if (state.mod === 'playground' && mod !== 'playground') window.Playground?.leave();
   state.mod = mod;
   state.page = 0;
   resetSession();
@@ -578,36 +591,36 @@ function moduleHeader(seq, title, total) {
 /* ── sections ── */
 function renderInicio() {
   const pages = [
-    () => `${moduleHeader('Secuencia 01 · Introducción', '', 3)}
-      <p class="exam-signal"><span class="d"></span> Prueba sustitutoria · BELE Bilbao</p>
-      <h1 class="page-title">Prueba de lenguaje musical</h1>
-      <p class="editorial-quote">Equivalente al 4º curso de Enseñanzas Elementales.</p>
-      <div class="theory-card"><h4>Estructura del examen</h4><ul>
-        <li><strong>a.1 Lectura rítmica</strong> — 8–16 compases, cambio de clave y compás.</li>
-        <li><strong>b.1 Errores melódicos</strong> — 5 errores de altura · 4 escuchas.</li>
-        <li><strong>b.2 Test de acordes</strong> — 10 tríadas · 2 escuchas de la serie.</li>
+    () => `${moduleHeader(t('seq_01_intro'), '', 3)}
+      <p class="exam-signal"><span class="d"></span> ${t('home_signal')}</p>
+      <h1 class="page-title">${t('home_title')}</h1>
+      <p class="editorial-quote">${t('home_quote')}</p>
+      <div class="theory-card"><h4>${t('home_exam_h')}</h4><ul>
+        <li><strong>${t('home_exam_1')}</strong></li>
+        <li><strong>${t('home_exam_2')}</strong></li>
+        <li><strong>${t('home_exam_3')}</strong></li>
       </ul></div>
-      <div class="theory-card"><h4>Modos de entrenamiento</h4><ul>
-        <li><strong>Fácil</strong> — 5 ítems, sin límite de escuchas.</li>
-        <li><strong>Medio</strong> — 10 ítems, 3 escuchas, 45 s por ítem.</li>
-        <li><strong>Difícil</strong> — 15 ítems, 2 escuchas, 25 s, acordes en bloque.</li>
+      <div class="theory-card"><h4>${t('home_modes_h')}</h4><ul>
+        <li><strong>${t('home_easy')}</strong></li>
+        <li><strong>${t('home_medium')}</strong></li>
+        <li><strong>${t('home_hard')}</strong></li>
       </ul></div>`,
-    () => `${moduleHeader('Secuencia 01 · Contenidos', '', 3)}
-      <h1 class="page-title">Contenidos evaluados</h1>
-      <div class="theory-card"><h4>Lectura rítmica</h4><ul>
-        <li>Claves Sol y Fa · compases 2/4–12/8</li>
-        <li>Figuras hasta semicorchea · tresillo, dosillo, cuatrillo</li>
+    () => `${moduleHeader(t('seq_01_content'), '', 3)}
+      <h1 class="page-title">${t('home_content_title')}</h1>
+      <div class="theory-card"><h4>${t('home_rt_h')}</h4><ul>
+        <li>${t('home_rt_1')}</li>
+        <li>${t('home_rt_2')}</li>
       </ul></div>
-      <div class="theory-card"><h4>Audición</h4><ul>
-        <li>Errores solo de altura — nunca ritmo</li>
-        <li>Tríadas Mayor, menor, disminuido, aumentado</li>
+      <div class="theory-card"><h4>${t('home_aural_h')}</h4><ul>
+        <li>${t('home_aural_1')}</li>
+        <li>${t('home_aural_2')}</li>
       </ul></div>`,
-    () => `${moduleHeader('Secuencia 01 · Práctica', '', 3)}
-      <h1 class="page-title">Elige módulo y dificultad</h1>
-      <p class="page-lead">Usa las pestañas <strong>Fácil · Medio · Difícil</strong> en cada sección. Debes responder cada ítem antes de avanzar.</p>
-      <div class="theory-card"><h4>Puntuación oficial</h4>
-        <table class="theory-table"><tr><th>Parte</th><th>Puntos</th></tr>
-        <tr><td>Lectura rítmica</td><td>5</td></tr><tr><td>Errores</td><td>2,5</td></tr><tr><td>Acordes</td><td>2,5</td></tr></table></div>`
+    () => `${moduleHeader(t('seq_01_practice'), '', 3)}
+      <h1 class="page-title">${t('home_pick_title')}</h1>
+      <p class="page-lead">${t('home_pick_lead')}</p>
+      <div class="theory-card"><h4>${t('home_score_h')}</h4>
+        <table class="theory-table"><tr><th>${t('home_score_part')}</th><th>${t('home_score_pts')}</th></tr>
+        <tr><td>${t('home_score_rt')}</td><td>5</td></tr><tr><td>${t('home_score_err')}</td><td>2,5</td></tr><tr><td>${t('home_score_ac')}</td><td>2,5</td></tr></table></div>`
   ];
   return pages[state.page]() + pageNav(3);
 }
@@ -615,25 +628,26 @@ function renderInicio() {
 function renderRitmo() {
   const total = pageCount('ritmo');
   if (state.page === 0) {
-    return `${moduleHeader('Secuencia 02 · Ritmo', '', total)}
-      <h1 class="page-title">Lectura rítmica · a.1</h1>
-      <p class="page-lead">Identifica el compás escrito y escuchado. En difícil aparecen 9/8, 12/8 y patrones con semicorcheas.</p>
-      <div class="theory-card"><h4>Compases del examen</h4><ul>
-        <li>Simples /4, /2, /8 · Compuestos /8</li>
-        <li>El pulso fuerte suena más alto al escuchar</li>
+    return `${moduleHeader(t('seq_rt'), '', total)}
+      <h1 class="page-title">${t('rt_intro_title')}</h1>
+      <p class="page-lead">${t('rt_intro_lead')}</p>
+      <div class="theory-card"><h4>${t('rt_intro_h')}</h4><ul>
+        <li>${t('rt_intro_1')}</li>
+        <li>${t('rt_intro_2')}</li>
       </ul></div>` + pageNav(total);
   }
   if (state.page === 1) {
-    return `${moduleHeader('Secuencia 02 · Ritmo', '', total)}
+    return `${moduleHeader(t('seq_rt'), '', total)}
       <h1 class="page-title">${t('prep')}</h1>
-      <p class="page-lead">Serie de <strong>${exCount()}</strong> patrones en modo ${cfg().label}.</p>
+      <p class="page-lead">${t('prep_rt_lead', { n: exCount(), diff: cfg().label })}</p>
       <button type="button" class="btn btn-primary" data-action="start-rt">${t('start_rt')}</button>` + pageNav(total);
   }
   if (!state.rt.series.length) startRt();
   const exIdx = exerciseIndex();
   const r = state.rt.series[exIdx];
+  if (!r) return `${moduleHeader(t('seq_rt'), '', total)}<p class="page-lead">${t('run_done')}</p>` + pageNav(total);
   const options = tsDistractors(r.label);
-  return `${moduleHeader('Secuencia 02 · Ritmo', '', total)}
+  return `${moduleHeader(t('seq_rt'), '', total)}
     <h1 class="page-title">${t('rt_title')}</h1>
     <p class="exercise-hint">${t('rt_hint')}</p>
     <div class="exercise-panel">
@@ -658,34 +672,36 @@ function renderRitmo() {
 function renderErrores() {
   const total = pageCount('errores');
   if (state.page === 0) {
-    return `${moduleHeader('Secuencia 03 · Errores', '', total)}
-      <h1 class="page-title">Errores melódicos · b.1</h1>
-      <p class="page-lead">Compara partitura y audio. En difícil hay ${cfg().errLen} notas y errores de ±1 semitono.</p>
-      <div class="theory-card"><h4>Estrategia (4 escuchas en examen)</h4><ol>
-        <li>Seguir sin marcar · marcar sospechas · confirmar · señalar</li>
+    return `${moduleHeader(t('seq_err'), '', total)}
+      <h1 class="page-title">${t('err_intro_title')}</h1>
+      <p class="page-lead">${t('err_intro_lead', { n: cfg().errLen })}</p>
+      <div class="theory-card"><h4>${t('err_intro_h')}</h4><ol>
+        <li>${t('err_intro_1')}</li>
       </ol></div>` + pageNav(total);
   }
   if (state.page === 1) {
-    return `${moduleHeader('Secuencia 03 · Errores', '', total)}
-      <h1 class="page-title">Serie auditiva</h1>
-      <p class="page-lead">${exCount()} melodías · localiza la nota errónea.</p>
+    return `${moduleHeader(t('seq_err'), '', total)}
+      <h1 class="page-title">${t('err_prep_title')}</h1>
+      <p class="page-lead">${t('err_prep_lead', { n: exCount() })}</p>
       <button type="button" class="btn btn-primary" data-action="start-err">${t('start_err')}</button>` + pageNav(total);
   }
   if (!state.err.series.length) startErr();
   const exIdx = exerciseIndex();
   const ex = state.err.series[exIdx];
+  if (!ex) return `${moduleHeader(t('seq_err'), '', total)}<p class="page-lead">${t('run_done')}</p>` + pageNav(total);
   const labels = ex.written.map((n, i) => {
-    const nm = noteByMidi(n.key)?.name || `N${i + 1}`;
-    return state.level === 'easy' ? `${i + 1}. ${nm}` : state.level === 'medium' ? `Nota ${i + 1}` : `#${i + 1}`;
+    const nm = noteDisplayName(noteByMidi(n.key)?.name || `N${i + 1}`);
+    return state.level === 'easy' ? t('err_num', { n: i + 1, name: nm })
+      : state.level === 'medium' ? t('err_note', { n: i + 1 }) : `#${i + 1}`;
   });
-  return `${moduleHeader('Secuencia 03 · Errores', '', total)}
+  return `${moduleHeader(t('seq_err'), '', total)}
     <h1 class="page-title">${t('err_title')}</h1>
     <div class="exercise-panel">
       <div class="vex-host" id="vex-err"></div>
       <div class="audio-row">
-        <button type="button" class="btn btn-outline" data-play="err-w" ${canListen() ? '' : 'disabled'}>Partitura ✓</button>
-        <button type="button" class="btn btn-outline" data-play="err-p" ${canListen() ? '' : 'disabled'}>Con error</button>
-        <button type="button" class="btn btn-outline" data-play="err-both" ${canListen() ? '' : 'disabled'}>A/B alternado</button>
+        <button type="button" class="btn btn-outline" data-play="err-w" ${canListen() ? '' : 'disabled'}>${t('err_score')}</button>
+        <button type="button" class="btn btn-outline" data-play="err-p" ${canListen() ? '' : 'disabled'}>${t('err_wrong')}</button>
+        <button type="button" class="btn btn-outline" data-play="err-both" ${canListen() ? '' : 'disabled'}>${t('err_ab')}</button>
         <div class="wave-bar"><i id="wave-err"></i></div>
       </div>
       <div class="options-grid cols-${Math.min(cfg().opts, labels.length)}">${labels.map((l, i) =>
@@ -697,25 +713,26 @@ function renderErrores() {
 function renderAcordes() {
   const total = pageCount('acordes');
   if (state.page === 0) {
-    return `${moduleHeader('Secuencia 04 · Acordes', '', total)}
-      <h1 class="page-title">Test auditivo · b.2</h1>
-      <p class="page-lead">Identifica el tipo de tríada. En difícil suenan en <strong>bloque</strong> (simultáneas).</p>
-      <div class="theory-card"><h4>Tipos</h4>
-        <table class="theory-table"><tr><th>Tipo</th><th>Intervalos</th></tr>
-        <tr><td>Mayor</td><td>0-4-7</td></tr><tr><td>menor</td><td>0-3-7</td></tr>
-        <tr><td>Disminuido</td><td>0-3-6</td></tr><tr><td>Aumentado</td><td>0-4-8</td></tr></table></div>` + pageNav(total);
+    return `${moduleHeader(t('seq_ac'), '', total)}
+      <h1 class="page-title">${t('ac_intro_title')}</h1>
+      <p class="page-lead">${t('ac_intro_lead')}</p>
+      <div class="theory-card"><h4>${t('ac_type')}</h4>
+        <table class="theory-table"><tr><th>${t('ac_type')}</th><th>${t('ac_intervals')}</th></tr>
+        <tr><td>${chordName('Mayor')}</td><td>0-4-7</td></tr><tr><td>${chordName('menor')}</td><td>0-3-7</td></tr>
+        <tr><td>${chordName('Disminuido')}</td><td>0-3-6</td></tr><tr><td>${chordName('Aumentado')}</td><td>0-4-8</td></tr></table></div>` + pageNav(total);
   }
   if (state.page === 1) {
-    return `${moduleHeader('Secuencia 04 · Acordes', '', total)}
-      <h1 class="page-title">Serie de ${exCount()}</h1>
+    return `${moduleHeader(t('seq_ac'), '', total)}
+      <h1 class="page-title">${t('ac_prep_title', { n: exCount() })}</h1>
       <button type="button" class="btn btn-primary" data-action="start-ac">${t('start_ac')}</button>` + pageNav(total);
   }
   if (!state.ac.series.length) startAc();
   const exIdx = exerciseIndex();
   const item = state.ac.series[exIdx];
+  if (!item) return `${moduleHeader(t('seq_ac'), '', total)}<p class="page-lead">${t('run_done')}</p>` + pageNav(total);
   const chord = CT[item.type];
   const opts = shuffle(CT.map(c => c.name)).slice(0, cfg().opts);
-  return `${moduleHeader('Secuencia 04 · Acordes', '', total)}
+  return `${moduleHeader(t('seq_ac'), '', total)}
     <h1 class="page-title">${t('ac_title')}</h1>
     <div class="exercise-panel">
       <div class="audio-row">
@@ -732,17 +749,17 @@ function renderAcordes() {
 function renderLectura() {
   const total = pageCount('lectura');
   if (state.page === 0) {
-    return `${moduleHeader('Secuencia 05 · Clave de Sol', '', total)}
-      <h1 class="page-title">Lectura en clave de Sol</h1>
-      <p class="page-lead">Para lectores de clave de Fa. Difícil: Do3–Do6 con distractores adyacentes.</p>
-      <div class="theory-card"><h4>Anclas</h4><ul>
-        <li>Do4 línea adicional · Sol4 2ª línea · Si4 3ª · Re5 4ª · Fa5 5ª</li>
+    return `${moduleHeader(t('seq_lect'), '', total)}
+      <h1 class="page-title">${t('lect_intro_title')}</h1>
+      <p class="page-lead">${t('lect_intro_lead')}</p>
+      <div class="theory-card"><h4>${t('lect_intro_h')}</h4><ul>
+        <li>${t('lect_intro_1')}</li>
       </ul></div>` + pageNav(total);
   }
   if (state.page === 1) {
-    return `${moduleHeader('Secuencia 05 · Clave de Sol', '', total)}
-      <h1 class="page-title">Serie de ${exCount()} notas</h1>
-      <p class="page-lead">Pool: ${LEVEL_LECT[state.level]} · ${cfg().opts} opciones por nota.</p>
+    return `${moduleHeader(t('seq_lect'), '', total)}
+      <h1 class="page-title">${t('lect_prep_title', { n: exCount() })}</h1>
+      <p class="page-lead">${t('lect_prep_lead', { pool: poolLabel(LEVEL_LECT[state.level]), o: cfg().opts })}</p>
       <button type="button" class="btn btn-primary" data-action="start-lect">${t('start_lect')}</button>` + pageNav(total);
   }
   if (!state.lect.series.length) startLect();
@@ -750,7 +767,7 @@ function renderLectura() {
   const note = state.lect.series[exIdx];
   if (!note) return renderLectura();
   const opts = getLectOptions(note);
-  return `${moduleHeader('Secuencia 05 · Clave de Sol', '', total)}
+  return `${moduleHeader(t('seq_lect'), '', total)}
     <h1 class="page-title">${t('lect_title')}</h1>
     <div class="exercise-panel">
       <div class="vex-host" id="vex-lect"></div>
@@ -760,7 +777,7 @@ function renderLectura() {
         <div class="wave-bar"><i id="wave-lect"></i></div>
       </div>
       <div class="options-grid cols-${cfg().opts}">${opts.map(o =>
-        `<button type="button" class="opt-btn" data-lect-ans="${o}" data-correct="${note.name}">${o}</button>`).join('')}</div>
+        `<button type="button" class="opt-btn" data-lect-ans="${o}" data-correct="${note.name}">${noteDisplayName(o)}</button>`).join('')}</div>
       <div class="feedback" id="fb-lect"></div>
     </div>` + pageNav(total);
 }
@@ -768,18 +785,19 @@ function renderLectura() {
 function renderTeoria() {
   const total = pageCount('teoria');
   if (state.page === 0) {
-    return `${moduleHeader('Secuencia 06 · Teoría', '', total)}
-      <h1 class="page-title">Cuestionario</h1>
-      <p class="page-lead">${exCount()} preguntas · tier ${cfg().teoTier}.</p>
+    return `${moduleHeader(t('seq_teo'), '', total)}
+      <h1 class="page-title">${t('teo_intro_title')}</h1>
+      <p class="page-lead">${t('teo_intro_lead', { n: exCount(), tier: cfg().teoTier })}</p>
       <button type="button" class="btn btn-primary" data-action="start-teo">${t('start_teo')}</button>` + pageNav(total);
   }
   if (!state.teo.order.length) startTeo();
   const qIdx = state.teo.order[exerciseIndex()];
-  const q = TEO_Q[qIdx];
+  if (qIdx == null) return `${moduleHeader(t('seq_teo'), '', total)}<p class="page-lead">${t('run_done')}</p>` + pageNav(total);
+  const q = getTeoQ(TEO_Q[qIdx], qIdx);
   const correctText = q.opts[q.a];
   let displayOpts = shuffle([...q.opts]);
   if (!displayOpts.includes(correctText)) displayOpts[0] = correctText;
-  return `${moduleHeader('Secuencia 06 · Teoría', '', total)}
+  return `${moduleHeader(t('seq_teo'), '', total)}
     <h1 class="page-title q-title">${q.q}</h1>
     <div class="exercise-panel">
       <div class="options-grid cols-${displayOpts.length}">${displayOpts.map(o =>
@@ -791,10 +809,8 @@ function renderTeoria() {
 function renderHistorial() {
   const total = H.log.length, correct = H.log.filter(x => x.ok).length;
   const pct = total ? Math.round(correct / total * 100) : 0;
-  const secs = [
-    { id: 'lect', label: 'Lectura' }, { id: 'ac', label: 'Acordes' },
-    { id: 'rt', label: 'Ritmo' }, { id: 'teo', label: 'Teoría' }, { id: 'err', label: 'Errores' }
-  ];
+  const secKeys = { lect: 'sec_lect', ac: 'sec_ac', rt: 'sec_rt', teo: 'sec_teo', err: 'sec_err' };
+  const secs = ['lect', 'ac', 'rt', 'teo', 'err'].map(id => ({ id, label: t(secKeys[id]) }));
   const bars = secs.map(s => {
     const sc = H.scores[s.id];
     const p = sc.t ? Math.round(sc.c / sc.t * 100) : 0;
@@ -803,36 +819,35 @@ function renderHistorial() {
   const lvlBars = LEVELS.map(l => {
     const b = H.byLevel[l] || { c: 0, t: 0 };
     const p = b.t ? Math.round(b.c / b.t * 100) : 0;
-    return `<div class="bar-row"><div class="bar-head"><span>${DIFF[l].label}</span><b>${p}% · ${b.c}/${b.t}</b></div><div class="lp"><i style="width:${p}%"></i></div></div>`;
+    return `<div class="bar-row"><div class="bar-head"><span>${t('diff_' + l)}</span><b>${p}% · ${b.c}/${b.t}</b></div><div class="lp"><i style="width:${p}%"></i></div></div>`;
   }).join('');
   const log = H.log.slice(0, 24).map(e => {
-    const labels = { lect: 'Lectura', ac: 'Acordes', rt: 'Ritmo', teo: 'Teoría', err: 'Errores' };
     const d = new Date(e.ts);
     return `<div class="log-item"><span class="${e.ok ? 'ok' : 'no'}">${e.ok ? '✓' : '✗'}</span>
-      <span>${labels[e.sec] || e.sec}</span><span>${DIFF[e.lvl]?.label || ''}</span><span>${e.lbl || '—'}</span>
-      <span class="log-time">${d.toLocaleString('es-ES',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})}</span></div>`;
+      <span>${t('sec_' + (e.sec === 'err' ? 'err' : e.sec))}</span><span>${t('diff_' + e.lvl)}</span><span>${noteDisplayName(e.lbl) || e.lbl || '—'}</span>
+      <span class="log-time">${localeDate(e.ts)}</span></div>`;
   }).join('');
-  return `<div class="page-meta"><span class="seq-label">Progreso</span></div>
-    <h1 class="page-title">Historial</h1>
+  return `<div class="page-meta"><span class="seq-label">${t('hist_meta')}</span></div>
+    <h1 class="page-title">${t('hist_title')}</h1>
     <div class="hist-grid">
-      <div class="hist-stat"><div class="val">${pct}<span class="pct">%</span></div><div class="lbl">Precisión</div></div>
-      <div class="hist-stat"><div class="val">${H.streak}</div><div class="lbl">Racha</div></div>
-      <div class="hist-stat"><div class="val">${H.best}</div><div class="lbl">Mejor racha</div></div>
-      <div class="hist-stat"><div class="val">${total}</div><div class="lbl">Respuestas</div></div>
+      <div class="hist-stat"><div class="val">${pct}<span class="pct">%</span></div><div class="lbl">${t('hist_precision')}</div></div>
+      <div class="hist-stat"><div class="val">${H.streak}</div><div class="lbl">${t('hist_streak')}</div></div>
+      <div class="hist-stat"><div class="val">${H.best}</div><div class="lbl">${t('hist_best')}</div></div>
+      <div class="hist-stat"><div class="val">${total}</div><div class="lbl">${t('hist_answers')}</div></div>
     </div>
-    <h4 class="sub">Por sección</h4>${bars}
-    <h4 class="sub">Por dificultad</h4>${lvlBars}
-    <h4 class="sub">Actividad reciente</h4>
-    <div class="log-list">${log || '<div class="log-item">Sin actividad aún</div>'}</div>
+    <h4 class="sub">${t('hist_by_sec')}</h4>${bars}
+    <h4 class="sub">${t('hist_by_diff')}</h4>${lvlBars}
+    <h4 class="sub">${t('hist_recent')}</h4>
+    <div class="log-list">${log || `<div class="log-item">${t('hist_empty')}</div>`}</div>
     <div class="sync-panel">
-      <h4 class="sub">Nube (Upstash)</h4>
-      <label class="sync-name"><span>Nombre</span>
-        <input type="text" id="sync-name" maxlength="64" placeholder="Opcional" value="${esc(window.BeleSync?.getName?.() || '')}">
+      <h4 class="sub">${t('sync_cloud')}</h4>
+      <label class="sync-name"><span>${t('sync_name')}</span>
+        <input type="text" id="sync-name" maxlength="64" data-i18n-placeholder="sync_optional" placeholder="${t('sync_optional')}" value="${esc(window.BeleSync?.getName?.() || '')}">
       </label>
-      <p class="sync-meta" id="sync-meta">Sincronizando…</p>
+      <p class="sync-meta" id="sync-meta">${t('sync_loading')}</p>
       <div class="sync-actions">
-        <button type="button" class="btn btn-outline" data-action="sync-now">Sincronizar ahora</button>
-        <button type="button" class="btn btn-outline reset-btn" data-action="reset-hist">Reiniciar historial</button>
+        <button type="button" class="btn btn-outline" data-action="sync-now">${t('sync_now')}</button>
+        <button type="button" class="btn btn-outline reset-btn" data-action="reset-hist">${t('reset_hist')}</button>
       </div>
     </div>`;
 }
@@ -845,19 +860,17 @@ function updSyncMeta() {
   const el = document.getElementById('sync-meta');
   if (!el || !window.BeleSync) return;
   const st = window.BeleSync.getStatus();
-  const labels = { idle: 'Listo', syncing: 'Guardando…', ok: 'Guardado en la nube', err: 'Error al guardar', offline: 'Sin conexión' };
+  const labels = { idle: t('sync_idle'), syncing: t('sync_syncing'), ok: t('sync_ok'), err: t('sync_err'), offline: t('sync_offline') };
   const uid = window.BeleSync.getUid();
   el.textContent = `${labels[st] || st} · ID ${uid.slice(0, 8)}…`;
 }
+window.updSyncMeta = updSyncMeta;
 
 function render() {
   const stage = document.getElementById('page-stage');
   const seqLabels = {
-    ritmo: lang === 'en' ? 'Sequence 02 · Rhythm' : 'Secuencia 02 · Ritmo',
-    errores: lang === 'en' ? 'Sequence 03 · Errors' : 'Secuencia 03 · Errores',
-    acordes: lang === 'en' ? 'Sequence 04 · Chords' : 'Secuencia 04 · Acordes',
-    lectura: lang === 'en' ? 'Sequence 05 · Treble clef' : 'Secuencia 05 · Clave de Sol',
-    teoria: lang === 'en' ? 'Sequence 06 · Theory' : 'Secuencia 06 · Teoría',
+    ritmo: t('seq_rt'), errores: t('seq_err'), acordes: t('seq_ac'),
+    lectura: t('seq_lect'), teoria: t('seq_teo'),
   };
   if (isResultsPage()) {
     const total = pageCount(state.mod);
@@ -865,7 +878,7 @@ function render() {
     postRender();
     return;
   }
-  const map = { inicio: renderInicio, ritmo: renderRitmo, errores: renderErrores, acordes: renderAcordes, lectura: renderLectura, teoria: renderTeoria, historial: renderHistorial };
+  const map = { inicio: renderInicio, ritmo: renderRitmo, errores: renderErrores, acordes: renderAcordes, lectura: renderLectura, teoria: renderTeoria, historial: renderHistorial, playground: () => window.Playground?.render() || '' };
   stage.innerHTML = map[state.mod]() || '';
   postRender();
 }
@@ -874,20 +887,20 @@ function syncAudioTarget() {
   const TA = window.TrainerAudio;
   if (!TA) return;
   const { mod, page } = state;
-  if (!isExercisePage() || mod === 'inicio' || mod === 'historial') { TA.clearTarget(); return; }
+  if (!isExercisePage() || mod === 'inicio' || mod === 'historial' || mod === 'playground') { TA.clearTarget(); return; }
   const idx = exerciseIndex();
   if (mod === 'lectura' && state.lect.series[idx]) {
     const n = state.lect.series[idx];
-    TA.setTarget({ type: 'note', midis: [n.midi], label: n.name, pitchClass: false });
+    TA.setTarget({ type: 'note', midis: [n.midi], label: noteDisplayName(n.name), pitchClass: false });
   } else if (mod === 'acordes' && state.ac.series[idx]) {
     const item = state.ac.series[idx];
     const midis = CT[item.type].iv.map(iv => item.root + iv);
     TA.setTarget({ type: 'chord', midis, chordName: CT[item.type].name, label: midis.map(m => TA.midiToLabel(m)).join(' ') });
   } else if (mod === 'errores' && state.err.series[idx]) {
     const ex = state.err.series[idx];
-    TA.setTarget({ type: 'melody', midis: ex.written.map(n => keyToMidi(n.key)), label: 'Melodía · encuentra el error' });
+    TA.setTarget({ type: 'melody', midis: ex.written.map(n => keyToMidi(n.key)), label: t('target_melody_err') });
   } else if (mod === 'ritmo') {
-    TA.setTarget({ type: 'melody', midis: [67, 60, 62, 64], label: 'Pulso fuerte · débil' });
+    TA.setTarget({ type: 'melody', midis: [67, 60, 62, 64], label: t('target_pulse') });
   } else TA.clearTarget();
 }
 
@@ -905,7 +918,11 @@ function postRender() {
   if (isExercisePage() && cfg().timer > 0 && !state.session.interval && !state.session.answered) startTimer();
   updListenUI();
   syncAudioTarget();
-  if (state.mod === 'historial') updSyncMeta();
+  if (mod === 'historial') updSyncMeta();
+  if (mod === 'playground') window.Playground?.mount();
+  else window.TrainerAudio?.setUserNoteHook?.(null);
+  const paneLabel = document.querySelector('.pane-label');
+  if (paneLabel) paneLabel.textContent = mod === 'playground' ? t('pg_pane') : t('pane_exercise');
   if (window.StatsViz) window.StatsViz.refresh();
 }
 
@@ -927,8 +944,7 @@ function bindFeedback(btn, fbId, ok, msgOk, msgNo, sec, lbl) {
   if (sec) logA(sec, ok, lbl);
   document.querySelectorAll('[data-nav="next"]').forEach(b => b.disabled = false);
   if (sec === 'rt') rhythmVexReveal(true);
-  const m = moduleMeta(state.mod);
-  if (state.page === m.results - 1) setTimeout(() => goPage(m.results), 700);
+  maybeAdvanceRun();
 }
 
 document.addEventListener('click', e => {
@@ -1000,7 +1016,7 @@ document.addEventListener('click', e => {
   const lectBtn = e.target.closest('[data-lect-ans]');
   if (lectBtn && !lectBtn.disabled) {
     const ok = lectBtn.dataset.lectAns === lectBtn.dataset.correct;
-    bindFeedback(lectBtn, 'fb-lect', ok, t('fb_ok'), t('fb_wrong', { x: lectBtn.dataset.correct }), 'lect', lectBtn.dataset.correct);
+    bindFeedback(lectBtn, 'fb-lect', ok, t('fb_ok'), t('fb_wrong', { x: noteDisplayName(lectBtn.dataset.correct) }), 'lect', lectBtn.dataset.correct);
     return;
   }
   const acBtn = e.target.closest('[data-ac-ans]');
@@ -1016,12 +1032,13 @@ document.addEventListener('click', e => {
   const errBtn = e.target.closest('[data-err-ans]');
   if (errBtn && !errBtn.disabled) {
     const ex = state.err.series[exerciseIndex()];
-    bindFeedback(errBtn, 'fb-err', +errBtn.dataset.errAns === ex.errIdx, '✓ ' + ex.errDesc, '✗ ' + ex.errDesc, 'err', ex.errDesc);
+    const desc = formatErrDesc(ex);
+    bindFeedback(errBtn, 'fb-err', +errBtn.dataset.errAns === ex.errIdx, '✓ ' + desc, '✗ ' + desc, 'err', desc);
     return;
   }
   const teoBtn = e.target.closest('[data-teo-ans]');
   if (teoBtn && !teoBtn.disabled) {
-    bindFeedback(teoBtn, 'fb-teo', teoBtn.dataset.teoAns === teoBtn.dataset.correct, t('fb_ok'), t('fb_wrong_teo', { x: teoBtn.dataset.correct }), 'teo', 'Teoría');
+    bindFeedback(teoBtn, 'fb-teo', teoBtn.dataset.teoAns === teoBtn.dataset.correct, t('fb_ok'), t('fb_wrong_teo', { x: teoBtn.dataset.correct }), 'teo', t('sec_teo'));
     return;
   }
 });
@@ -1046,9 +1063,9 @@ let focusMode = '';
 let focusRestore = null;
 
 const FOCUS_MAP = {
-  exercise: { id: 'stage-pane', title: 'Ejercicio' },
-  viz: { id: 'viz-panel', title: 'Instrumento · MIDI' },
-  stats: { id: 'util-panel', title: 'Utilización' },
+  exercise: { id: 'stage-pane', titleKey: 'focus_exercise' },
+  viz: { id: 'viz-panel', titleKey: 'focus_viz' },
+  stats: { id: 'util-panel', titleKey: 'focus_stats' },
 };
 
 function refreshFocusLayout() {
@@ -1070,10 +1087,19 @@ function updateFocusButtons() {
   document.querySelectorAll('.focus-toggle').forEach(btn => {
     const on = btn.dataset.focus === focusMode;
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-    const labels = { exercise: 'ejercicio', viz: 'panel MIDI', stats: 'estadísticas' };
-    btn.title = on ? 'Cerrar pantalla completa' : `Pantalla completa · ${labels[btn.dataset.focus] || ''}`;
+    const keys = { exercise: 'focus_ex', viz: 'focus_viz_short', stats: 'focus_stats_short' };
+    btn.title = on ? t('focus_close_full') : t('focus_fullscreen', { n: t(keys[btn.dataset.focus] || '') });
   });
 }
+window.updateFocusButtons = updateFocusButtons;
+
+function updateFocusTitle() {
+  if (!focusMode) return;
+  const cfg = FOCUS_MAP[focusMode];
+  const title = document.getElementById('focus-lightbox-title');
+  if (cfg && title) title.textContent = t(cfg.titleKey);
+}
+window.updateFocusTitle = updateFocusTitle;
 
 function closeFocus() {
   const lb = document.getElementById('focus-lightbox');
@@ -1112,7 +1138,7 @@ function openFocus(mode) {
   if (focusRestore) restoreFocusElement(focusRestore);
 
   focusRestore = { el, parent: el.parentElement, next: el.nextSibling, mode };
-  if (title) title.textContent = cfg.title;
+  if (title) title.textContent = t(cfg.titleKey);
   body.appendChild(el);
   el.classList.add('focus-elevated');
 

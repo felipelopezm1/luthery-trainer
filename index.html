@@ -19,6 +19,7 @@
   <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19V5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M6 3v16"/></symbol>
   <symbol id="i-ear" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 4 2 5 2 5H4s2-1 2-5"/><path d="M10 12a2 2 0 0 0 4 0"/></symbol>
   <symbol id="i-note" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 12l10 5 10-5"/><path d="M2 17l10 5 10-5"/></symbol>
 </defs></svg>
 
 <div class="app-shell" data-theme="light">
@@ -35,23 +36,23 @@
       <span class="score-pill">Err.<b id="sc-err">0/0</b></span>
       <span class="score-pill">Teo.<b id="sc-teo">0/0</b></span>
     </div>
-    <div class="fab" role="group" aria-label="Idioma">
+    <div class="fab" role="group" aria-label="Idioma" data-i18n-aria="aria_lang">
       <button type="button" data-lang-set="es" aria-pressed="true">ES</button>
       <button type="button" data-lang-set="en" aria-pressed="false">EN</button>
     </div>
-    <div class="fab" role="group" aria-label="Tema">
+    <div class="fab" role="group" aria-label="Tema" data-i18n-aria="aria_theme">
       <button type="button" data-theme-set="dark" aria-pressed="false">DARK</button>
       <button type="button" data-theme-set="light" aria-pressed="true">LIGHT</button>
     </div>
   </header>
 
-  <div class="metro-strip" id="metro-strip" aria-label="Metrónomo global">
+  <div class="metro-strip" id="metro-strip" data-i18n-aria="aria_metro">
     <button type="button" class="metro-btn" id="metro-toggle" aria-pressed="false">
       <svg class="ico sm"><use href="#i-clock"/></svg>
       <span>Metrónomo</span>
     </button>
     <label class="metro-bpm-wrap">
-      <input type="range" class="metro-bpm" id="metro-bpm" min="40" max="208" value="72" aria-label="Pulsos por minuto">
+      <input type="range" class="metro-bpm" id="metro-bpm" min="40" max="208" value="72" data-i18n-aria="metro_bpm_aria" aria-label="Pulsos por minuto">
       <b id="metro-bpm-val">72</b><span class="metro-unit">BPM</span>
     </label>
     <div class="metro-lights" id="metro-lights" aria-hidden="true">
@@ -60,7 +61,7 @@
   </div>
 
   <div class="appscreen trainer mod s12" style="border-radius:0;border:0;padding:0;background:transparent">
-    <nav class="rail" id="main-nav" aria-label="Secciones">
+    <nav class="rail" id="main-nav" data-i18n-aria="aria_sections">
       <button type="button" class="r-i on" data-mod="inicio" title="Examen" aria-label="Examen">
         <svg class="ico sm"><use href="#i-book"/></svg>
       </button>
@@ -83,62 +84,65 @@
       <button type="button" class="r-i" data-mod="historial" title="Progreso" aria-label="Historial y progreso">
         <svg class="ico sm"><use href="#i-chart"/></svg>
       </button>
+      <button type="button" class="r-i r-i--playground" data-mod="playground" title="Playground" aria-label="Playground">
+        <svg class="ico sm"><use href="#i-layers"/></svg>
+      </button>
     </nav>
 
     <main class="main" id="app-main">
       <div class="content-split" id="content-split">
         <div class="stage-pane" id="stage-pane">
           <div class="pane-bar">
-            <span class="pane-label">Ejercicio</span>
-            <button type="button" class="focus-toggle" data-focus="exercise" aria-pressed="false" title="Expandir ejercicio">⛶</button>
+            <span class="pane-label" data-i18n="pane_exercise">Ejercicio</span>
+            <button type="button" class="focus-toggle" data-focus="exercise" aria-pressed="false" data-i18n-title="expand_exercise" title="Expandir ejercicio">⛶</button>
           </div>
           <div class="page-stage" id="page-stage"></div>
         </div>
-        <aside class="viz-panel" id="viz-panel" aria-label="Audio y visualización">
+        <aside class="viz-panel" id="viz-panel" data-i18n-aria="aria_viz">
           <div class="viz-head">
-            <span class="label">Instrumento</span>
+            <span class="label" data-i18n="pane_instrument">Instrumento</span>
             <div class="viz-head-actions">
               <span class="viz-hint">SF2 · <a href="https://github.com/davy7125/polyphone" target="_blank" rel="noopener">Polyphone</a></span>
-              <button type="button" class="focus-toggle" data-focus="viz" aria-pressed="false" title="Expandir panel MIDI">⛶</button>
+              <button type="button" class="focus-toggle" data-focus="viz" aria-pressed="false" data-i18n-title="expand_viz" title="Expandir panel MIDI">⛶</button>
             </div>
           </div>
           <div class="instr-tabs" id="instr-tabs"></div>
           <p class="instr-status" id="instr-status">Cargando piano…</p>
           <div class="viz-canvas-wrap">
-            <canvas id="viz-wave" class="viz-canvas" aria-label="Forma de onda"></canvas>
-            <canvas id="viz-spec" class="viz-canvas viz-spec" aria-label="Espectro"></canvas>
+            <canvas id="viz-wave" class="viz-canvas" data-i18n-aria="viz_wave" aria-label="Forma de onda"></canvas>
+            <canvas id="viz-spec" class="viz-canvas viz-spec" data-i18n-aria="viz_spec" aria-label="Espectro"></canvas>
           </div>
-          <div class="viz-keyboard" id="viz-keyboard" aria-label="Teclado MIDI"></div>
+          <div class="viz-keyboard" id="viz-keyboard" data-i18n-aria="viz_keyboard" aria-label="Teclado MIDI"></div>
           <div class="midi-block">
             <div class="midi-row">
-              <button type="button" class="btn btn-outline btn-sq" id="midi-connect" title="Conectar LPK25">MIDI</button>
-              <select class="inp midi-select" id="midi-select" aria-label="Dispositivo MIDI"><option>—</option></select>
+              <button type="button" class="btn btn-outline btn-sq" id="midi-connect" data-i18n-title="midi_connect" title="Conectar LPK25">MIDI</button>
+              <select class="inp midi-select" id="midi-select" data-i18n-aria="midi_device" aria-label="Dispositivo MIDI"><option>—</option></select>
             </div>
-            <p class="midi-status" id="midi-status">Conecta tu AKAI LPK25</p>
+            <p class="midi-status" id="midi-status" data-i18n="midi_prompt">Conecta tu AKAI LPK25</p>
           </div>
           <div class="compare-block">
-            <span class="label">Comparación en vivo</span>
-            <div class="compare-row"><span>Objetivo</span><b id="compare-target">—</b></div>
-            <div class="compare-row"><span>Tu nota</span><b id="compare-user">—</b></div>
+            <span class="label" data-i18n="compare_live">Comparación en vivo</span>
+            <div class="compare-row"><span data-i18n="compare_target">Objetivo</span><b id="compare-target">—</b></div>
+            <div class="compare-row"><span data-i18n="compare_you">Tu nota</span><b id="compare-user">—</b></div>
             <p class="compare-result" id="compare-result">Toca el teclado para comparar con el ejercicio</p>
           </div>
         </aside>
-        <aside class="util-panel" id="util-panel" aria-label="Utilización y progreso">
+        <aside class="util-panel" id="util-panel" data-i18n-aria="aria_util">
           <div class="util-head">
-            <span class="label">Utilización</span>
+            <span class="label" data-i18n="pane_util">Utilización</span>
             <div class="util-head-actions">
-              <span class="util-context-label" id="util-context-label">Panel general</span>
-              <button type="button" class="focus-toggle" data-focus="stats" aria-pressed="false" title="Expandir estadísticas">⛶</button>
+              <span class="util-context-label" id="util-context-label" data-i18n="util_general">Panel general</span>
+              <button type="button" class="focus-toggle" data-focus="stats" aria-pressed="false" data-i18n-title="expand_stats" title="Expandir estadísticas">⛶</button>
             </div>
           </div>
           <div class="util-ring-wrap">
-            <canvas id="util-gl-main" class="util-gl" aria-label="Precisión y secciones"></canvas>
+            <canvas id="util-gl-main" class="util-gl" data-i18n-aria="util_ring_aria" aria-label="Precisión y secciones"></canvas>
             <div class="util-ring-label" id="util-ring-label">—</div>
           </div>
           <div class="util-kpis" id="util-kpis"></div>
-          <span class="util-sub">Tendencia · sesiones recientes</span>
-          <canvas id="util-gl-detail" class="util-gl util-gl-sm" aria-label="Tendencia por sesión"></canvas>
-          <p class="util-caption" id="util-caption">Sin actividad registrada aún</p>
+          <span class="util-sub" data-i18n="util_trend">Tendencia · sesiones recientes</span>
+          <canvas id="util-gl-detail" class="util-gl util-gl-sm" data-i18n-aria="util_trend_aria" aria-label="Tendencia por sesión"></canvas>
+          <p class="util-caption" id="util-caption" data-i18n="util_empty">Sin actividad registrada aún</p>
         </aside>
       </div>
     </main>
@@ -150,7 +154,7 @@
   <div class="focus-lightbox-shell">
     <header class="focus-lightbox-head">
       <span id="focus-lightbox-title">Ejercicio</span>
-      <button type="button" class="focus-lightbox-close" id="focus-lightbox-close">✕ Volver</button>
+      <button type="button" class="focus-lightbox-close" id="focus-lightbox-close" data-i18n="focus_close">✕ Volver</button>
     </header>
     <div class="focus-lightbox-body" id="focus-lightbox-body"></div>
   </div>
@@ -163,6 +167,7 @@
 <script src="js/sync.js"></script>
 <script src="js/stats-viz.js"></script>
 <script src="js/i18n.js"></script>
+<script src="js/playground.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
