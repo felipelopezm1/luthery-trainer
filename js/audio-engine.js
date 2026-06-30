@@ -11,10 +11,12 @@ const TrainerAudio = (() => {
   ];
 
   const NOTE_NAMES = ['Do','Do♯','Re','Re♯','Mi','Fa','Fa♯','Sol','Sol♯','La','La♯','Si'];
-  const SF_BASE = 'https://gleitz.github.io/midi-js-soundfonts/MusyngKite/';
+  const INSTR_KEY = 'music_bele_instr';
+  const SF_PACK = 'MusyngKite';
 
   let ac = null, master = null, analyser = null;
-  let instrument = null, loading = false, currentId = 'piano';
+  let instrument = null, loading = false, loadPromise = null;
+  let currentId = localStorage.getItem(INSTR_KEY) || 'piano';
   let midiAccess = null, activeInput = null, animId = null;
   let target = null; // { type, midis, label, chordName }
   let lastUser = null;
@@ -48,27 +50,46 @@ const TrainerAudio = (() => {
     currentId = id;
     loading = true;
     renderInstruments();
-    try {
-      ensureCtx();
-      instrument = await Soundfont.instrument(ac, def.sf, { soundfont: SF_BASE, destination: master });
-    } catch (e) {
-      console.warn('Soundfont load failed', e);
-      instrument = null;
-    }
-    loading = false;
-    renderInstruments();
-    return instrument;
+    const job = (async () => {
+      try {
+        ensureCtx();
+        instrument = await Soundfont.instrument(ac, def.sf, {
+          soundfont: SF_PACK,
+          destination: master,
+        });
+        localStorage.setItem(INSTR_KEY, id);
+        setInstrStatus(`${def.label} listo`);
+      } catch (e) {
+        console.warn('Soundfont load failed', def.sf, e);
+        instrument = null;
+        setInstrStatus('Error al cargar · pulso sintético');
+      } finally {
+        loading = false;
+        loadPromise = null;
+        renderInstruments();
+      }
+      return instrument;
+    })();
+    loadPromise = job;
+    return job;
+  }
+
+  function whenReady(fn) {
+    if (loadPromise) loadPromise.then(fn);
+    else fn();
   }
 
   function playMidi(m, dur = 1.1, when = 0, gain = 0.7) {
-    ensureCtx();
-    flashKey(m, 'target');
-    if (instrument) {
-      instrument.play(m, ac.currentTime + when, { duration: dur, gain });
-    } else {
-      oscPlay(m, dur, when, gain);
-    }
-    pulseViz();
+    whenReady(() => {
+      ensureCtx();
+      flashKey(m, 'target');
+      if (instrument) {
+        instrument.play(m, ac.currentTime + when, { duration: dur, gain });
+      } else {
+        oscPlay(m, dur, when, gain);
+      }
+      pulseViz();
+    });
   }
 
   function playMidis(arr, gap = 0.1, dur = 1.2, block = false) {
@@ -90,17 +111,8 @@ const TrainerAudio = (() => {
   }
 
   function playFreq(freq, start, dur, vol = 0.4) {
-    ensureCtx();
-    const o = ac.createOscillator(), g = ac.createGain();
-    o.connect(g); g.connect(master);
-    o.type = 'triangle'; o.frequency.value = freq;
-    const t = ac.currentTime + start;
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(vol, t + 0.015);
-    g.gain.setValueAtTime(vol, t + dur - 0.05);
-    g.gain.linearRampToValueAtTime(0, t + dur);
-    o.start(t); o.stop(t + dur);
-    pulseViz();
+    const midi = Math.round(69 + 12 * Math.log2(freq / 440));
+    playMidi(midi, dur, start, vol);
   }
 
   function playMelody(midis, gap = 0.32, dur = 0.28) {
@@ -350,12 +362,19 @@ const TrainerAudio = (() => {
     }
   }
 
+  function setInstrStatus(txt) {
+    const el = document.getElementById('instr-status');
+    if (el) el.textContent = txt;
+  }
+
   function renderInstruments() {
     const wrap = document.getElementById('instr-tabs');
     if (!wrap) return;
-    wrap.innerHTML = INSTRUMENTS.map(i =>
-      `<button type="button" class="chip ${currentId === i.id ? 'on' : ''}" data-instr="${i.id}" ${loading ? 'disabled' : ''}>${i.label}</button>`
-    ).join('');
+    wrap.innerHTML = INSTRUMENTS.map(i => {
+      const on = currentId === i.id;
+      const busy = on && loading;
+      return `<button type="button" class="chip ${on ? 'on' : ''}${busy ? ' loading' : ''}" data-instr="${i.id}" ${loading ? 'disabled' : ''} aria-busy="${busy}">${i.label}${busy ? '…' : ''}</button>`;
+    }).join('');
   }
 
   function initPanel() {
@@ -363,6 +382,8 @@ const TrainerAudio = (() => {
     drawKeyboard();
     updateCompareUI();
     startVizLoop();
+    const def = INSTRUMENTS.find(i => i.id === currentId) || INSTRUMENTS[0];
+    setInstrStatus(`Cargando ${def.label}…`);
     loadInstrument(currentId);
   }
 
@@ -397,7 +418,11 @@ const TrainerAudio = (() => {
     init() { ensureCtx(); bindUI(); initPanel(); },
     playMidi, playMidis, playMelody, playChord, playFreq,
     setTarget, clearTarget, compareNote,
-    connectMidi, midiToLabel
+    connectMidi, midiToLabel,
+    getInstrumentId: () => currentId,
+    getInstruments: () => INSTRUMENTS,
+    loadInstrument,
+    whenReady,
   };
 })();
 

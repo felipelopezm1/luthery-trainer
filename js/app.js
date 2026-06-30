@@ -140,6 +140,10 @@ function playNote(freq, start, dur, vol = 0.4, type = 'triangle') {
   g.gain.linearRampToValueAtTime(0, t + dur);
   o.start(t); o.stop(t + dur);
 }
+function playMidi(m, start, dur, vol = 0.55) {
+  if (window.TrainerAudio) { window.TrainerAudio.playMidi(m, dur, start, vol); return; }
+  playNote(mf(m), start, dur, vol);
+}
 function playChord(root, ivs, block) {
   if (window.TrainerAudio) { window.TrainerAudio.playChord(root, ivs, block); return; }
   if (block) ivs.forEach(iv => playNote(mf(root + iv), 0, 1.6, 0.32));
@@ -856,9 +860,10 @@ document.addEventListener('click', e => {
     const kind = play.dataset.play;
     const idx = state.page - 2;
     if (kind === 'lect') {
-      const n = state.lect.series[idx]; if (n) { playNote(mf(n.midi), 0, 1.1); animWave('wave-lect', 1100); }
+      const n = state.lect.series[idx]; if (n) { playMidi(n.midi, 0, 1.1, 0.65); animWave('wave-lect', 1100); }
     } else if (kind === 'lect-ref') {
-      playNote(mf(60), 0, 0.8); setTimeout(() => { const n = state.lect.series[idx]; if (n) playNote(mf(n.midi), 0, 1.1); }, 900);
+      playMidi(60, 0, 0.8, 0.55);
+      setTimeout(() => { const n = state.lect.series[idx]; if (n) playMidi(n.midi, 0, 1.1, 0.65); }, 900);
       animWave('wave-lect', 2000);
     } else if (kind === 'ac' || kind === 'ac-arp') {
       const item = state.ac.series[idx];
@@ -867,7 +872,7 @@ document.addEventListener('click', e => {
       const r = state.rt.series[idx];
       if (r) {
         let t = 0; const bd = kind === 'rt-fast' ? 0.35 : 0.55;
-        r.beats.forEach((b, i) => { playNote(mf(i === 0 ? 67 : 60), t, b * bd * 0.85, i === 0 ? 0.52 : 0.34); t += b * bd; });
+        r.beats.forEach((b, i) => { playMidi(i === 0 ? 67 : 60, t, b * bd * 0.85, i === 0 ? 0.52 : 0.34); t += b * bd; });
         animWave('wave-rt', t * 1000 + 150);
       }
     } else if (kind === 'err-w') {
