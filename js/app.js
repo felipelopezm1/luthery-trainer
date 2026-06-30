@@ -943,25 +943,101 @@ document.addEventListener('change', e => {
 });
 
 let focusMode = '';
-function setFocus(mode) {
-  focusMode = focusMode === mode ? '' : mode;
-  const split = document.getElementById('content-split');
-  const back = document.getElementById('focus-back');
-  if (split) split.dataset.focus = focusMode;
+let focusRestore = null;
+
+const FOCUS_MAP = {
+  exercise: { id: 'stage-pane', title: 'Ejercicio' },
+  viz: { id: 'viz-panel', title: 'Instrumento · MIDI' },
+  stats: { id: 'util-panel', title: 'Utilización' },
+};
+
+function refreshFocusLayout() {
+  window.dispatchEvent(new Event('resize'));
+  if (window.StatsViz) window.StatsViz.refresh();
+  if (window.TrainerAudio?.drawKeyboard) window.TrainerAudio.drawKeyboard();
+}
+
+function restoreFocusElement(restore) {
+  if (!restore?.el?.parentElement) return;
+  const { el, parent, next } = restore;
+  if (next && next.parentElement === parent) parent.insertBefore(el, next);
+  else parent.appendChild(el);
+  el.classList.remove('focus-elevated');
+}
+
+function updateFocusButtons() {
   document.querySelectorAll('.focus-toggle').forEach(btn => {
     const on = btn.dataset.focus === focusMode;
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-    btn.title = on ? 'Volver al layout' : (btn.dataset.focus === 'viz' ? 'Expandir panel MIDI' : 'Expandir ejercicio');
+    const labels = { exercise: 'ejercicio', viz: 'panel MIDI', stats: 'estadísticas' };
+    btn.title = on ? 'Cerrar pantalla completa' : `Pantalla completa · ${labels[btn.dataset.focus] || ''}`;
   });
-  if (back) back.hidden = !focusMode;
-  if (focusMode && window.TrainerAudio) window.TrainerAudio.drawKeyboard?.();
-  if (window.StatsViz) window.StatsViz.refresh();
 }
 
+function closeFocus() {
+  const lb = document.getElementById('focus-lightbox');
+  if (!focusRestore) {
+    if (lb) { lb.classList.remove('is-open'); lb.hidden = true; lb.setAttribute('aria-hidden', 'true'); }
+    focusMode = '';
+    document.body.classList.remove('focus-open');
+    updateFocusButtons();
+    return;
+  }
+  lb?.classList.remove('is-open');
+  document.body.classList.remove('focus-open');
+  setTimeout(() => {
+    restoreFocusElement(focusRestore);
+    focusRestore = null;
+    focusMode = '';
+    if (lb) { lb.hidden = true; lb.setAttribute('aria-hidden', 'true'); }
+    updateFocusButtons();
+    refreshFocusLayout();
+  }, 260);
+}
+
+function openFocus(mode) {
+  const cfg = FOCUS_MAP[mode];
+  const lb = document.getElementById('focus-lightbox');
+  const body = document.getElementById('focus-lightbox-body');
+  const title = document.getElementById('focus-lightbox-title');
+  const el = cfg && document.getElementById(cfg.id);
+  if (!cfg || !el || !lb || !body) return;
+
+  if (focusRestore) restoreFocusElement(focusRestore);
+
+  focusRestore = { el, parent: el.parentElement, next: el.nextSibling, mode };
+  if (title) title.textContent = cfg.title;
+  body.appendChild(el);
+  el.classList.add('focus-elevated');
+
+  lb.hidden = false;
+  lb.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('focus-open');
+  focusMode = mode;
+  updateFocusButtons();
+  requestAnimationFrame(() => {
+    lb.classList.add('is-open');
+    setTimeout(refreshFocusLayout, 280);
+  });
+}
+
+function setFocus(mode) {
+  if (focusMode === mode) closeFocus();
+  else if (mode) openFocus(mode);
+  else closeFocus();
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && focusMode) closeFocus();
+});
+
 document.addEventListener('click', e => {
+  if (e.target.closest('[data-focus-close]') || e.target.closest('#focus-lightbox-close')) {
+    closeFocus();
+    return;
+  }
   const fb = e.target.closest('[data-focus]');
   if (fb) { setFocus(fb.dataset.focus); return; }
-  if (e.target.closest('#focus-back')) { setFocus(focusMode); return; }
 });
 
 (async function boot() {

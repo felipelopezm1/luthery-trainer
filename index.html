@@ -41,6 +41,20 @@
     </div>
   </header>
 
+  <div class="metro-strip" id="metro-strip" aria-label="Metrónomo global">
+    <button type="button" class="metro-btn" id="metro-toggle" aria-pressed="false">
+      <svg class="ico sm"><use href="#i-clock"/></svg>
+      <span>Metrónomo</span>
+    </button>
+    <label class="metro-bpm-wrap">
+      <input type="range" class="metro-bpm" id="metro-bpm" min="40" max="208" value="72" aria-label="Pulsos por minuto">
+      <b id="metro-bpm-val">72</b><span class="metro-unit">BPM</span>
+    </label>
+    <div class="metro-lights" id="metro-lights" aria-hidden="true">
+      <span></span><span></span><span></span><span></span>
+    </div>
+  </div>
+
   <div class="appscreen trainer mod s12" style="border-radius:0;border:0;padding:0;background:transparent">
     <nav class="rail" id="main-nav" aria-label="Secciones">
       <button type="button" class="r-i on" data-mod="inicio" title="Examen" aria-label="Examen">
@@ -123,8 +137,18 @@
           <p class="util-caption" id="util-caption">Sin actividad registrada aún</p>
         </aside>
       </div>
-      <button type="button" class="focus-back" id="focus-back" hidden>Volver al layout</button>
     </main>
+  </div>
+</div>
+
+<div class="focus-lightbox" id="focus-lightbox" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="focus-lightbox-title">
+  <div class="focus-lightbox-backdrop" data-focus-close></div>
+  <div class="focus-lightbox-shell">
+    <header class="focus-lightbox-head">
+      <span id="focus-lightbox-title">Ejercicio</span>
+      <button type="button" class="focus-lightbox-close" id="focus-lightbox-close">✕ Volver</button>
+    </header>
+    <div class="focus-lightbox-body" id="focus-lightbox-body"></div>
   </div>
 </div>
 

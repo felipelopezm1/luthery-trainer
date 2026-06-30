@@ -210,59 +210,220 @@
   color: var(--surface);
 }
 
-.focus-back {
-  position: fixed;
-  left: 50%;
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-  transform: translateX(-50%);
-  z-index: 120;
-  padding: 10px 18px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+/* ── global metronome strip ── */
+.metro-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+@media (min-width: 768px) {
+  .metro-strip { padding: 8px 20px; }
+}
+
+.metro-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+  background: var(--raised);
+  color: var(--display);
   font-family: var(--f-mono);
-  font-size: 10px;
+  font-size: 9px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   cursor: pointer;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  transition: background 0.2s var(--ease), border-color 0.2s var(--ease);
 }
 
-.content-split[data-focus="exercise"] .viz-panel { display: none !important; }
-.content-split[data-focus="exercise"] .stage-pane { flex: 1; width: 100%; }
-.content-split[data-focus="exercise"] .page-stage { max-width: none; }
-
-.content-split[data-focus="viz"] .stage-pane { display: none; }
-.content-split[data-focus="viz"] .viz-panel {
-  display: flex !important;
-  width: 100% !important;
-  max-height: none !important;
-  flex: 1;
-  border-left: 0;
+.metro-btn.on {
+  background: var(--display);
+  color: var(--surface);
+  border-color: var(--display);
 }
 
-.content-split[data-focus="viz"] .viz-keyboard { height: min(28vh, 180px); }
-.content-split[data-focus="viz"] .viz-canvas { height: min(16vh, 120px); }
-.content-split[data-focus="viz"] .viz-spec { height: min(12vh, 96px); }
-
-.content-split[data-focus="stats"] .stage-pane,
-.content-split[data-focus="stats"] .viz-panel { display: none !important; }
-.content-split[data-focus="stats"] .util-panel {
-  display: flex !important;
-  width: 100% !important;
-  flex: 1;
-  border-left: 0;
-  max-height: none;
-}
-.content-split[data-focus="stats"] .util-gl-main { height: min(36vh, 280px); }
-.content-split[data-focus="stats"] .util-gl-sm { height: min(24vh, 200px); }
-
-.viz-head-actions {
+.metro-bpm-wrap {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
+  min-width: 140px;
+  max-width: 280px;
+}
+
+.metro-bpm {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.metro-bpm-wrap b {
+  font-family: var(--f-display);
+  font-size: 18px;
+  min-width: 2ch;
+}
+
+.metro-unit {
+  font-family: var(--f-mono);
+  font-size: 8px;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+.metro-lights {
+  display: flex;
+  gap: 5px;
+  margin-left: auto;
+}
+
+.metro-lights span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  background: var(--raised);
+  transition: background 0.08s, transform 0.08s;
+}
+
+.metro-lights span.on {
+  background: var(--secondary);
+  transform: scale(1.15);
+}
+
+.metro-lights span.on.accent {
+  background: var(--accent);
+}
+
+/* ── focus lightbox ── */
+.focus-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s var(--ease);
+}
+
+.focus-lightbox.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.focus-lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.62);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.focus-lightbox-shell {
+  position: relative;
+  z-index: 1;
+  width: min(1040px, 96vw);
+  height: min(90vh, 920px);
+  max-height: calc(100dvh - 24px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  transform: scale(0.94) translateY(12px);
+  opacity: 0;
+  transition: transform 0.32s var(--ease), opacity 0.28s var(--ease);
+  overflow: hidden;
+}
+
+.focus-lightbox.is-open .focus-lightbox-shell {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+}
+
+.focus-lightbox-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.focus-lightbox-head span {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.focus-lightbox-close {
+  padding: 8px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+  background: var(--raised);
+  color: var(--display);
+  font-family: var(--f-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.focus-lightbox-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.focus-lightbox-body > .stage-pane,
+.focus-lightbox-body > .viz-panel,
+.focus-lightbox-body > .util-panel {
+  display: flex !important;
+  flex-direction: column;
+  width: 100% !important;
+  min-height: 100%;
+  height: auto;
+  max-height: none !important;
+  border: 0 !important;
+  overflow: auto;
+}
+
+.focus-lightbox-body > .stage-pane .page-stage {
+  max-width: none;
+  flex: 1;
+}
+
+.focus-lightbox-body > .viz-panel .viz-keyboard {
+  height: min(24vh, 200px);
+}
+
+.focus-lightbox-body > .viz-panel .viz-canvas {
+  height: min(14vh, 120px);
+}
+
+.focus-lightbox-body > .util-panel .util-gl-main {
+  height: min(32vh, 260px);
+}
+
+.focus-lightbox-body > .util-panel .util-gl-sm {
+  height: min(20vh, 160px);
+}
+
+body.focus-open {
+  overflow: hidden;
 }
 
 .page-stage {
@@ -452,6 +613,12 @@
   align-items: baseline;
   gap: 8px;
   justify-content: space-between;
+}
+
+.viz-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .viz-hint {

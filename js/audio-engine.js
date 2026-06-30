@@ -23,6 +23,14 @@ const TrainerAudio = (() => {
   let lastUser = null;
   let compareResult = null; // { ok, msg }
   let activeNotes = new Set();
+  const METRO_KEY = 'music_bele_metro_bpm';
+  let metro = {
+    bpm: parseInt(localStorage.getItem(METRO_KEY), 10) || 72,
+    running: false,
+    beat: 0,
+    raf: null,
+    next: 0,
+  };
 
   function midiToLabel(m) {
     const pc = ((m % 12) + 12) % 12;
@@ -284,6 +292,82 @@ const TrainerAudio = (() => {
 
   function pulseViz() { pulse = 1; }
 
+  /* ── metronome ── */
+  function syncMetroUI() {
+    const btn = document.getElementById('metro-toggle');
+    const val = document.getElementById('metro-bpm-val');
+    const range = document.getElementById('metro-bpm');
+    if (btn) {
+      btn.setAttribute('aria-pressed', metro.running ? 'true' : 'false');
+      btn.classList.toggle('on', metro.running);
+    }
+    if (val) val.textContent = String(metro.bpm);
+    if (range && +range.value !== metro.bpm) range.value = metro.bpm;
+  }
+
+  function updateMetroLights() {
+    const wrap = document.getElementById('metro-lights');
+    if (!wrap) return;
+    [...wrap.children].forEach((el, i) => {
+      el.classList.toggle('on', i === metro.beat);
+      el.classList.toggle('accent', i === 0 && metro.beat === 0);
+    });
+  }
+
+  function metroTick(accent) {
+    ensureCtx();
+    const m = accent ? 77 : 76;
+    if (instrument) instrument.play(m, ac.currentTime, { duration: 0.07, gain: accent ? 0.8 : 0.5 });
+    else oscPlay(m, 0.05, 0, accent ? 0.45 : 0.28);
+    pulseViz();
+    updateMetroLights();
+  }
+
+  function metroLoop() {
+    if (!metro.running) return;
+    const iv = 60 / metro.bpm;
+    while (metro.next <= ac.currentTime + 0.06) {
+      metroTick(metro.beat === 0);
+      metro.beat = (metro.beat + 1) % 4;
+      metro.next += iv;
+    }
+    metro.raf = requestAnimationFrame(metroLoop);
+  }
+
+  function startMetro() {
+    ensureCtx();
+    if (ac.state === 'suspended') ac.resume();
+    metro.running = true;
+    metro.beat = 0;
+    metro.next = ac.currentTime + 0.04;
+    updateMetroLights();
+    syncMetroUI();
+    metroLoop();
+  }
+
+  function stopMetro() {
+    metro.running = false;
+    if (metro.raf) cancelAnimationFrame(metro.raf);
+    metro.raf = null;
+    syncMetroUI();
+    updateMetroLights();
+  }
+
+  function toggleMetro() {
+    if (metro.running) stopMetro();
+    else startMetro();
+  }
+
+  function setMetroBpm(v) {
+    metro.bpm = Math.max(40, Math.min(208, Math.round(v)));
+    localStorage.setItem(METRO_KEY, String(metro.bpm));
+    syncMetroUI();
+    if (metro.running) {
+      metro.next = ac.currentTime + 0.04;
+      metro.beat = 0;
+    }
+  }
+
   function startVizLoop() {
     if (animId) return;
     const wave = document.getElementById('viz-wave');
@@ -422,6 +506,7 @@ const TrainerAudio = (() => {
     setInstrStatus(`Cargando ${def.label}…`);
     loadInstrument(currentId);
     connectMidi();
+    syncMetroUI();
     document.addEventListener('pointerdown', () => { if (!midiAccess) connectMidi(); }, { once: true });
   }
 
@@ -443,6 +528,13 @@ const TrainerAudio = (() => {
       playUserNote(m);
       if (target) compareNote(m);
     });
+    document.getElementById('metro-toggle')?.addEventListener('click', () => {
+      ensureCtx();
+      toggleMetro();
+    });
+    document.getElementById('metro-bpm')?.addEventListener('input', e => {
+      setMetroBpm(+e.target.value);
+    });
   }
 
   return {
@@ -455,6 +547,9 @@ const TrainerAudio = (() => {
     loadInstrument,
     whenReady,
     drawKeyboard,
+    toggleMetro,
+    setMetroBpm,
+    isMetroRunning: () => metro.running,
   };
 })();
 
