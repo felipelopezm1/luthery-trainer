@@ -17,6 +17,7 @@ const ScoreFollow = (() => {
   let onCursor = null;
   let lastBpm = 72;
   let lastXml = null;
+  let ensembleOn = false;
   let hlLayer = null;
   const LOOKAHEAD = 8;
 
@@ -149,7 +150,7 @@ const ScoreFollow = (() => {
     const openTies = new Map();
     let firstBpm = 0;
 
-    const title = text(doc, 'work-title') || text(doc, 'movement-title') || '';
+    const title = text(doc, 'work-title') || text(doc, 'movement-title') || text(doc, 'credit-words') || '';
 
     measures.forEach((wrap, mi) => {
       const measure = wrap.el;
@@ -381,6 +382,19 @@ const ScoreFollow = (() => {
     return loadXml(xml);
   }
 
+  async function loadUrl(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('fetch failed');
+    const name = String(url.split('?')[0] || '').toLowerCase();
+    if (name.endsWith('.mxl') && window.JSZip) {
+      const zip = await JSZip.loadAsync(await res.arrayBuffer());
+      const entry = Object.keys(zip.files).find(k => /\.xml$/i.test(k) && !k.startsWith('META-INF'));
+      if (!entry) throw new Error('parse failed');
+      return loadXml(await zip.files[entry].async('string'));
+    }
+    return loadXml(await res.text());
+  }
+
   function loadXml(xml) {
     lastXml = xml;
     osmd = null;
@@ -589,7 +603,12 @@ const ScoreFollow = (() => {
       currentTarget = n.midi;
       if (onTarget) onTarget(n.midi);
       if (window.PitchDetect) window.PitchDetect.setTarget(n.midi);
-      window.CelloEngine?.play(n.midi, Math.min(Math.max(n.durSec, 0.12), 4), 0, n.gain ?? 0.45);
+      const dur = Math.min(Math.max(n.durSec, 0.12), 4);
+      const gain = n.gain ?? 0.45;
+      window.CelloEngine?.play(n.midi, dur, 0, gain);
+      if (ensembleOn && window.CelloEngine?.getId?.() !== 'ensemble') {
+        window.CelloEngine?.playEnsemble?.(n.midi, dur, 0, gain);
+      }
       seekCursor(n.startQ);
       paintSpectrum(cursorIdx);
       if (onCursor) onCursor(cursorIdx, n);
@@ -615,6 +634,7 @@ const ScoreFollow = (() => {
     onTarget = opts.onTarget || null;
     onEnd = opts.onEnd || null;
     onCursor = opts.onCursor || null;
+    ensembleOn = opts.ensemble !== false;
     if (paused && playing) {
       paused = false;
       t0 = performance.now();
@@ -623,13 +643,15 @@ const ScoreFollow = (() => {
     }
     stop();
     playNotes = materialize(notes, lastBpm);
+    ensembleOn = opts.ensemble !== false;
     playing = true;
     paused = false;
-    pauseAccum = 0;
+    const first = playNotes[0];
+    pauseAccum = (opts.fromSounding && first) ? first.startSec : 0;
     t0 = performance.now();
     cursorIdx = 0;
     currentTarget = null;
-    seekCursor(playNotes[0]?.startQ || 0);
+    seekCursor(first?.startQ || 0);
     paintSpectrum(0);
     if (window.TrainerAudio?.setMetroMeter) window.TrainerAudio.setMetroMeter(meta.beats, meta.beatType);
     if (window.TrainerAudio?.setMetroBpm) window.TrainerAudio.setMetroBpm(lastBpm);
@@ -668,11 +690,15 @@ const ScoreFollow = (() => {
   }
 
   return {
-    loadFile, loadXml, render, play, pause, stop, destroy,
+    loadFile, loadUrl, loadXml, render, play, pause, stop, destroy,
     getNotes: () => notes,
+    getFirstMidi: () => notes.find(n => n.midi != null)?.midi ?? null,
     getMeta: () => ({ ...meta, tempoMap: meta.tempoMap.slice() }),
     getCurrentTarget: () => currentTarget,
     isPlaying: () => playing && !paused,
+    isPaused: () => playing && paused,
+    isActive: () => playing,
+    getElapsed: elapsed,
     hasXml: () => !!lastXml,
   };
 })();

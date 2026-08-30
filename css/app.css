@@ -2009,10 +2009,21 @@ select:focus-visible {
 .app-shell.cello-mode .page-stage {
   max-width: none;
   padding: 16px 20px 40px;
+  display: flex;
+  justify-content: center;
 }
-.app-shell.cello-mode .stage-pane { flex: 1; }
+.app-shell.cello-mode .stage-pane {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
 
-.cello-app { max-width: none; margin: 0; }
+.cello-app {
+  width: min(100%, 1240px);
+  max-width: 1240px;
+  margin: 0 auto;
+}
+.cello-head { text-align: center; }
 .cello-app--focus .cello-sub,
 .cello-app--following .cello-sub { display: none; }
 .cello-kicker {
@@ -2030,7 +2041,7 @@ select:focus-visible {
   margin: 0 0 6px;
   color: var(--display);
 }
-.cello-sub { margin: 0 0 16px; color: var(--secondary); font-size: 14px; max-width: 52ch; }
+.cello-sub { margin: 0 auto 16px; color: var(--secondary); font-size: 14px; max-width: 52ch; }
 .cello-bar { display: none; }
 .cello-studio {
   display: grid;
@@ -2040,7 +2051,36 @@ select:focus-visible {
   align-items: start;
 }
 .cello-dock { grid-area: dock; }
-.cello-score-wrap { grid-area: score; min-width: 0; }
+.cello-score-wrap {
+  grid-area: score;
+  min-width: 0;
+  position: relative;
+}
+.cello-ens-layer {
+  position: absolute;
+  inset: 14px 10px 10px 10px;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: calc(var(--r-md) - 2px);
+  background:
+    repeating-linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 8%, transparent) 0 13px,
+      transparent 13px 26px
+    );
+  opacity: 0.4;
+}
+.cello-ens-layer::after {
+  content: attr(data-label);
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 .cello-dock {
   position: sticky;
   top: 10px;
@@ -2163,12 +2203,21 @@ select:focus-visible {
   text-align: center;
 }
 .cello-score {
+  position: relative;
+  z-index: 1;
   min-height: min(70vh, 720px);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   padding: 10px;
   overflow: auto;
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  display: flex;
+  justify-content: center;
+}
+.cello-score > svg,
+.cello-score > div {
+  margin-left: auto;
+  margin-right: auto;
 }
 .cello-score--pdf { padding: 0; background: #f4f1ea; }
 .cello-score--follow {

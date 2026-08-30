@@ -3,12 +3,13 @@ const Cello = (() => {
   const LISTEN_KEY = 'music_bele_cello_listen';
   const YT_KEY = 'music_bele_cello_yt';
   const EXAMPLE = {
-    id: 'vivaldi-rv40-largo',
-    title: 'Vivaldi · RV 40 · Largo',
-    url: 'scores/vivaldi-rv40-largo.xml',
-    pdf: 'scores/vivaldi-op14-cello-sonatas.pdf',
-    bpm: 50,
-    ytQuery: 'Vivaldi RV 40 cello sonata Largo',
+    id: 'squire-danse-rustique',
+    title: 'Squire · Danse Rustique',
+    url: 'scores/danse-rustique-squire.mxl',
+    pdf: '',
+    bpm: 110,
+    ytQuery: 'Squire Danse Rustique cello',
+    ytId: '6gJm6UIT3dY',
   };
   let catalog = [EXAMPLE];
   let pieceId = EXAMPLE.id;
@@ -23,6 +24,7 @@ const Cello = (() => {
   let ytCurrent = null;
   let ytTitle = '';
   let ytBrowse = false;
+  let syncWait = null;
 
   function listenOn() {
     return localStorage.getItem(LISTEN_KEY) === '1';
@@ -66,12 +68,14 @@ const Cello = (() => {
       centsEl.style.setProperty('--cents', `${c + 50}%`);
       centsEl.classList.toggle('hit', p.hit === true);
     }
-    if (st && p.target != null) st.textContent = p.hit ? t('cello_hit') : t('cello_miss');
+    if (st && p.target != null && !following && !window.ScoreFollow?.isActive?.()) {
+      st.textContent = p.hit ? t('cello_hit') : t('cello_miss');
+    }
   }
 
   async function startMic() {
-    if (!window.PitchDetect) return;
-    await window.PitchDetect.start({ minHz: 65, maxHz: 880, onPitch: updateTuner });
+    if (!window.PitchDetect) return false;
+    return window.PitchDetect.start({ minHz: 65, maxHz: 880, onPitch: updateTuner });
   }
 
   function savedVideos() {
@@ -105,9 +109,15 @@ const Cello = (() => {
     const empty = document.getElementById('cello-yt-empty');
     const now = document.getElementById('cello-yt-now-title');
     if (frame && id) {
-      frame.src = `https://www.youtube-nocookie.com/embed/${id}`;
+      const origin = encodeURIComponent(location.origin);
+      frame.src = `https://www.youtube-nocookie.com/embed/${id}?enablejsapi=1&origin=${origin}&playsinline=1&rel=0`;
       frame.hidden = false;
       frame.title = ytTitle || 'YouTube';
+      frame.onload = () => {
+        try {
+          frame.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1 }), '*');
+        } catch {}
+      };
     }
     if (empty) empty.hidden = !!id;
     if (now) now.textContent = ytTitle || '';
@@ -141,38 +151,157 @@ const Cello = (() => {
     document.getElementById('cello-play')?.setAttribute('aria-pressed', on ? 'true' : 'false');
   }
 
+  function ytCommand(func, args = []) {
+    const frame = document.getElementById('cello-yt-frame');
+    if (!frame?.contentWindow || !ytCurrent) return;
+    frame.contentWindow.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
+  }
+
+  function videoTimeForScore(sec) {
+    const start = Number(currentPiece().ytStart) || 0;
+    return Math.max(0, start + (sec || 0));
+  }
+
+  function followVideo(playing, seek) {
+    if (!ytCurrent) return;
+    if (seek !== false) ytCommand('seekTo', [videoTimeForScore(window.ScoreFollow?.getElapsed?.() || 0), true]);
+    ytCommand(playing ? 'playVideo' : 'pauseVideo');
+  }
+
+  function paintPlayBtn() {
+    const btn = document.getElementById('cello-play');
+    if (!btn) return;
+    const live = window.ScoreFollow?.isPlaying?.();
+    btn.textContent = live ? t('cello_pause') : t('cello_play');
+    btn.setAttribute('aria-pressed', live ? 'true' : 'false');
+  }
+
+  function clearSyncWait() {
+    if (syncWait?.timer) clearTimeout(syncWait.timer);
+    syncWait = null;
+    if (listenOn() && window.PitchDetect) {
+      window.PitchDetect.start({ onPitch: updateTuner });
+    }
+  }
+
+  function beginFollowPlayback() {
+    clearSyncWait();
+    const st = document.getElementById('cello-status');
+    if (st) st.textContent = t('cello_sync_ok');
+    const range = document.getElementById('metro-bpm');
+    const m = scoreMeta();
+    const bpm = range ? +range.value : m.bpm;
+    window.TrainerAudio?.setMetroMeter?.(m.beats, m.beatType);
+    window.CelloEngine?.ensureEnsemble?.();
+    window.ScoreFollow.play({
+      bpm,
+      ensemble: true,
+      fromSounding: false,
+      onTarget: midi => window.PitchDetect?.setTarget(midi),
+      onCursor: (_i, note) => {
+        const live = document.getElementById('cello-status');
+        if (live) live.textContent = t('cello_following', { bar: note.measure || 1, m: m.beats, bt: m.beatType, bpm });
+      },
+      onEnd: () => { stopFollow(true); },
+    });
+    followVideo(true);
+    paintPlayBtn();
+    if (!window.TrainerAudio?.isMetroRunning?.()) window.TrainerAudio?.toggleMetro?.();
+  }
+
+  function pauseFollow() {
+    if (!window.ScoreFollow?.isPlaying?.()) return;
+    window.ScoreFollow.pause();
+    followVideo(false);
+    if (window.TrainerAudio?.isMetroRunning?.()) window.TrainerAudio.toggleMetro();
+    paintPlayBtn();
+    const st = document.getElementById('cello-status');
+    if (st) st.textContent = t('cello_paused');
+  }
+
+  function resumeFollow() {
+    if (!window.ScoreFollow?.isPaused?.()) return;
+    window.ScoreFollow.play();
+    followVideo(true);
+    if (!window.TrainerAudio?.isMetroRunning?.()) window.TrainerAudio.toggleMetro();
+    paintPlayBtn();
+  }
+
+  async function toggleFollow() {
+    if (syncWait) {
+      beginFollowPlayback();
+      return;
+    }
+    if (window.ScoreFollow?.isPlaying?.()) {
+      pauseFollow();
+      return;
+    }
+    if (window.ScoreFollow?.isPaused?.()) {
+      resumeFollow();
+      return;
+    }
+    await startFollow();
+  }
+
+  function onSyncPitch(p) {
+    updateTuner(p);
+    if (!syncWait || p?.midi == null) return;
+    const want = syncWait.midis || [];
+    if (!want.some(m => Math.abs(m - p.midi) <= 1)) return;
+    syncWait.hits = (syncWait.hits || 0) + 1;
+    if (syncWait.hits >= 2 || p.hit) beginFollowPlayback();
+  }
+
   async function startFollow() {
     const host = document.getElementById('cello-score');
     const bar = document.getElementById('cello-pdf-bar');
     if (!window.ScoreFollow?.getNotes?.()?.length) return;
+    if (window.ScoreFollow?.isPlaying?.() || window.ScoreFollow?.isPaused?.()) return;
+    if (syncWait) {
+      beginFollowPlayback();
+      return;
+    }
     if (bar) bar.hidden = true;
     if (host) {
       host.classList.remove('cello-score--pdf');
       host.classList.add('cello-score--follow');
       await window.ScoreFollow.render(host);
     }
-    const range = document.getElementById('metro-bpm');
-    const m = scoreMeta();
-    const bpm = range ? +range.value : m.bpm;
-    window.TrainerAudio?.setMetroMeter?.(m.beats, m.beatType);
     setFollowing(true);
-    window.ScoreFollow.play({
-      bpm,
-      onTarget: midi => window.PitchDetect?.setTarget(midi),
-      onCursor: (_i, note) => {
-        const st = document.getElementById('cello-status');
-        if (st) st.textContent = t('cello_following', { bar: note.measure || 1, m: m.beats, bt: m.beatType, bpm });
-      },
-      onEnd: () => { stopFollow(true); },
+    paintPlayBtn();
+    const st = document.getElementById('cello-status');
+    if (st) st.textContent = t('cello_sync');
+    setListen(true);
+    const ok = await startMic();
+    const firstNotes = (window.ScoreFollow.getNotes() || []).slice(0, 3);
+    const firstMidi = firstNotes[0]?.midi ?? window.ScoreFollow.getFirstMidi?.();
+    if (firstMidi != null) window.PitchDetect?.setTarget(firstMidi);
+    ytCommand('playVideo');
+    ytCommand('pauseVideo');
+    if (!ok) {
+      beginFollowPlayback();
+      return;
+    }
+    syncWait = {
+      hits: 0,
+      midis: firstNotes.map(n => n.midi).filter(m => m != null),
+      timer: setTimeout(() => beginFollowPlayback(), 12000),
+    };
+    await window.PitchDetect.start({
+      minHz: 65,
+      maxHz: 880,
+      onPitch: onSyncPitch,
     });
-    if (!window.TrainerAudio?.isMetroRunning?.()) window.TrainerAudio?.toggleMetro?.();
   }
 
   async function stopFollow(ended) {
-    const wasOn = following || window.ScoreFollow?.isPlaying?.();
+    const wasOn = following || window.ScoreFollow?.isPlaying?.() || !!syncWait;
+    clearSyncWait();
     window.ScoreFollow?.stop();
+    ytCommand('pauseVideo');
     if (wasOn && window.TrainerAudio?.isMetroRunning?.()) window.TrainerAudio.toggleMetro();
     setFollowing(false);
+    paintPlayBtn();
     const st = document.getElementById('cello-status');
     const m = scoreMeta();
     const pages = window.ScorePdf?.pageInfo()?.pages;
@@ -240,7 +369,7 @@ const Cello = (() => {
     searchYoutube(q);
   }
 
-  async function searchYoutube(q) {
+  async function searchYoutube(q, opts = {}) {
     const box = document.getElementById('cello-yt-results');
     const st = document.getElementById('cello-yt-status');
     if (box) box.innerHTML = '';
@@ -253,12 +382,13 @@ const Cello = (() => {
         if (!hits.length) continue;
         if (st) st.textContent = '';
         paintHits(hits);
-        return;
+        if (opts.autoPick && hits[0]) setPlayer(hits[0].id, hits[0].title);
+        return hits;
       } catch {}
     }
     const href = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
     if (st) st.innerHTML = `${t('cello_yt_fail')} <a href="${href}" target="_blank" rel="noopener">${t('cello_yt_open')}</a>`;
-    window.open(href, '_blank', 'noopener');
+    if (!opts.autoPick) window.open(href, '_blank', 'noopener');
   }
 
   function currentPiece() {
@@ -278,7 +408,10 @@ const Cello = (() => {
           pdf: p.pdf || '',
           bpm: p.bpm || EXAMPLE.bpm,
           ytQuery: p.ytQuery || '',
+          ytId: p.ytId || '',
+          ytStart: p.ytStart || 0,
         })).filter(p => p.url);
+        pieceId = catalog[0].id;
       }
     } catch {}
     paintPieceSelect();
@@ -334,6 +467,8 @@ const Cello = (() => {
     if (title && piece.title) title.textContent = piece.title;
     const q = document.getElementById('cello-yt-q');
     if (q && piece.ytQuery) q.value = piece.ytQuery;
+    if (piece.ytId) setPlayer(piece.ytId, piece.title);
+    else if (piece.ytQuery) searchYoutube(piece.ytQuery, { autoPick: true });
     const st = document.getElementById('cello-status');
     try {
       if (piece.pdf && window.ScorePdf) {
@@ -343,8 +478,14 @@ const Cello = (() => {
         window.ScorePdf?.destroy?.();
         document.getElementById('cello-score')?.classList.remove('cello-score--pdf');
       }
-      const res = await fetch(piece.url);
-      if (res.ok && window.ScoreFollow) window.ScoreFollow.loadXml(await res.text());
+      if (window.ScoreFollow) {
+        if (window.ScoreFollow.loadUrl) await window.ScoreFollow.loadUrl(piece.url);
+        else {
+          const res = await fetch(piece.url);
+          if (res.ok) window.ScoreFollow.loadXml(await res.text());
+        }
+        if (!piece.pdf) await window.ScoreFollow.render(document.getElementById('cello-score'));
+      }
       exampleLoaded = true;
       applyScoreMetro();
       const pages = window.ScorePdf?.pageInfo()?.pages;
@@ -364,13 +505,13 @@ const Cello = (() => {
     return `<div class="cello-app" data-mod="cello">
       <header class="cello-head">
         <p class="cello-kicker">${t('cello_kicker')}</p>
-        <h1 class="cello-title">${t('cello_piece')}</h1>
+        <h1 class="cello-title">${esc(currentPiece().title || t('cello_piece'))}</h1>
         <p class="cello-sub">${t('cello_piece_sub')}</p>
       </header>
       <div class="cello-studio">
         <aside class="cello-dock" aria-label="${t('cello_play')}">
           <div class="cello-dock-main">
-            <button type="button" class="cello-btn cello-btn--play" id="cello-play" aria-pressed="false">${t('cello_play')}</button>
+            <button type="button" class="cello-btn cello-btn--play" id="cello-play" aria-pressed="false" aria-keyshortcuts="Space">${t('cello_play')}</button>
             <button type="button" class="cello-btn" id="cello-stop">${t('cello_stop')}</button>
           </div>
           <label class="cello-piece-wrap">
@@ -400,6 +541,7 @@ const Cello = (() => {
           </div>
         </aside>
         <div class="cello-score-wrap">
+          <div class="cello-ens-layer" aria-hidden="true" data-label="${esc(t('cello_ens_hint'))}"></div>
           <div class="cello-score" id="cello-score"></div>
         </div>
         <aside class="cello-yt" aria-label="${t('cello_yt_label')}">
@@ -414,7 +556,7 @@ const Cello = (() => {
           <div class="cello-yt-browse" id="cello-yt-browse">
             <h2 class="cello-yt-title">${t('cello_yt_label')}</h2>
             <form class="cello-yt-form" id="cello-yt-form">
-              <input type="search" class="cello-yt-input" id="cello-yt-q" value="${esc(EXAMPLE.ytQuery)}" placeholder="${t('cello_yt_ph')}" autocomplete="off">
+              <input type="search" class="cello-yt-input" id="cello-yt-q" value="${esc(currentPiece().ytQuery || EXAMPLE.ytQuery)}" placeholder="${t('cello_yt_ph')}" autocomplete="off">
               <button type="submit" class="cello-btn">${t('cello_yt_go')}</button>
             </form>
             <p class="cello-yt-status" id="cello-yt-status"></p>
@@ -467,8 +609,15 @@ const Cello = (() => {
       }
     });
     document.addEventListener('keydown', e => {
-      if (!document.querySelector('.cello-app') || !window.ScorePdf?.hasPdf()) return;
-      if (e.target.matches('input, textarea')) return;
+      if (!document.querySelector('.cello-app')) return;
+      if (e.target.matches('input, textarea, select') || e.target.isContentEditable) return;
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        if (e.repeat) return;
+        toggleFollow();
+        return;
+      }
+      if (!window.ScorePdf?.hasPdf()) return;
       if (e.key === 'ArrowLeft') { e.preventDefault(); window.ScorePdf.go(-1); }
       if (e.key === 'ArrowRight') { e.preventDefault(); window.ScorePdf.go(1); }
     });
@@ -495,7 +644,7 @@ const Cello = (() => {
         return;
       }
       if (e.target.closest('#cello-listen')) { setListen(!listenOn()); return; }
-      if (e.target.closest('#cello-play')) { startFollow(); return; }
+      if (e.target.closest('#cello-play')) { toggleFollow(); return; }
       if (e.target.closest('#cello-stop')) { stopFollow(false); }
     });
   }
@@ -511,20 +660,23 @@ const Cello = (() => {
     syncListenUI();
     await loadCatalog();
     renderYtSaved();
+    window.CelloEngine?.ensureEnsemble?.();
     if (ytCurrent) setPlayer(ytCurrent, ytTitle);
     else syncFocus();
-    if (window.ScorePdf?.hasPdf()) {
+    if (!exampleLoaded) {
+      await loadExample(pieceId);
+    } else if (window.ScorePdf?.hasPdf()) {
       await showPdf();
     } else if (window.ScoreFollow?.getNotes?.()?.length) {
       await window.ScoreFollow.render(document.getElementById('cello-score'));
-    } else if (!exampleLoaded) {
-      await loadExample();
     }
   }
 
   function leave() {
+    clearSyncWait();
     window.PitchDetect?.stop();
     window.ScoreFollow?.stop?.();
+    ytCommand('pauseVideo');
     if (window.TrainerAudio?.isMetroRunning?.()) window.TrainerAudio.toggleMetro();
     window.TrainerAudio?.setMetroMeter?.(4, 4);
     following = false;

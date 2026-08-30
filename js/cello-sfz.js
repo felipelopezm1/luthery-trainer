@@ -16,7 +16,9 @@ const CelloEngine = (() => {
   let engine = 'osc';
   let ac = null;
   let inst = null;
+  let ensInst = null;
   let ready = null;
+  let ensReady = null;
   let currentId = localStorage.getItem(STORE) || 'cello';
 
   function defOf(id) {
@@ -75,10 +77,6 @@ const CelloEngine = (() => {
     return engine;
   }
 
-  async function init() {
-    return load(currentId, false);
-  }
-
   function play(midi, dur = 0.8, when = 0, gain = 0.7) {
     if (inst) {
       inst.play(midi, (ac?.currentTime || 0) + when, { duration: dur, gain });
@@ -91,8 +89,38 @@ const CelloEngine = (() => {
     oscPlay(midi, dur, when, gain);
   }
 
+  async function ensureEnsemble() {
+    if (ensReady) return ensReady;
+    ensReady = (async () => {
+      if (typeof Soundfont === 'undefined') return;
+      try {
+        ensureCtx();
+        ensInst = await Soundfont.instrument(ac, 'string_ensemble_1', { soundfont: 'MusyngKite' });
+      } catch (e) {
+        console.warn('[CelloEngine] ensemble', e);
+        ensInst = null;
+      }
+    })();
+    return ensReady;
+  }
+
+  function playEnsemble(midi, dur = 0.9, when = 0, gain = 0.45) {
+    const g = Math.max(0.08, gain * 0.28);
+    const hold = Math.min(Math.max(dur * 1.2, 0.2), 5);
+    if (ensInst) {
+      ensInst.play(midi, (ac?.currentTime || 0) + when, { duration: hold, gain: g });
+      return;
+    }
+    oscPlay(midi, hold, when, g);
+  }
+
+  async function init() {
+    ensureEnsemble();
+    return load(currentId, false);
+  }
+
   return {
-    init, load, play,
+    init, load, play, playEnsemble, ensureEnsemble,
     list: () => STRINGS.slice(),
     getId: () => currentId,
     engineName: () => engine,

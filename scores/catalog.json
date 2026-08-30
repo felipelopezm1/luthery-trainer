@@ -1,5 +1,14 @@
 [
   {
+    "id": "squire-danse-rustique",
+    "title": "Squire · Danse Rustique",
+    "xml": "scores/danse-rustique-squire.mxl",
+    "bpm": 110,
+    "ytQuery": "Squire Danse Rustique cello",
+    "ytId": "6gJm6UIT3dY",
+    "source": "musescore-export"
+  },
+  {
     "id": "vivaldi-rv40-largo",
     "title": "Vivaldi · RV 40 · Largo",
     "xml": "scores/vivaldi-rv40-largo.xml",

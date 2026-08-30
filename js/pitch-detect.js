@@ -83,14 +83,18 @@ const PitchDetect = (() => {
   }
 
   async function start(opts = {}) {
+    if (opts.onPitch !== undefined) onPitch = opts.onPitch;
+    if (opts.minHz) minHz = opts.minHz;
+    if (opts.maxHz) maxHz = opts.maxHz;
     if (running) return true;
-    onPitch = opts.onPitch || null;
-    minHz = opts.minHz || 65;
-    maxHz = opts.maxHz || 880;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
+      const media = navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       });
+      stream = await Promise.race([
+        media,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('mic-timeout')), 8000)),
+      ]);
     } catch {
       emit({ error: 'denied' });
       return false;
