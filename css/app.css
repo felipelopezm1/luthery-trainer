@@ -275,6 +275,22 @@
   letter-spacing: 0.06em;
 }
 
+.metro-voice-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.metro-voice {
+  min-height: 32px;
+  max-width: 11rem;
+  padding: 4px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--raised);
+  color: var(--display);
+  font-family: var(--f-mono);
+  font-size: 11px;
+}
 .metro-lights {
   display: flex;
   gap: 5px;
@@ -1996,8 +2012,8 @@ select:focus-visible {
 }
 .app-shell.cello-mode .stage-pane { flex: 1; }
 
-.cello-app { max-width: 1280px; margin: 0 auto; }
-.cello-app--focus { max-width: none; }
+.cello-app { max-width: none; margin: 0; }
+.cello-app--focus .cello-sub,
 .cello-app--following .cello-sub { display: none; }
 .cello-kicker {
   font-family: var(--f-mono);
@@ -2018,10 +2034,13 @@ select:focus-visible {
 .cello-bar { display: none; }
 .cello-studio {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
+  grid-template-columns: 132px minmax(0, 1fr) minmax(260px, 34%);
+  grid-template-areas: "dock score video";
+  gap: 12px;
   align-items: start;
 }
+.cello-dock { grid-area: dock; }
+.cello-score-wrap { grid-area: score; min-width: 0; }
 .cello-dock {
   position: sticky;
   top: 10px;
@@ -2033,6 +2052,12 @@ select:focus-visible {
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   background: var(--surface);
+}
+.cello-dock-main,
+.cello-dock-more {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .cello-dock .cello-btn,
 .cello-dock .cello-upload-btn { width: 100%; }
@@ -2103,21 +2128,26 @@ select:focus-visible {
 }
 .cello-cents.hit i { background: var(--success); }
 .cello-layout { display: contents; }
-@media (min-width: 720px) {
-  .cello-studio { grid-template-columns: 148px minmax(0, 1fr); }
-  .cello-app:not(.cello-app--focus) .cello-yt { grid-column: 2; }
-}
-@media (min-width: 960px) {
-  .cello-app--focus .cello-studio {
-    grid-template-columns: 148px minmax(0, 1fr) minmax(280px, 0.9fr);
+@media (max-width: 860px) {
+  .cello-studio {
+    grid-template-columns: minmax(0, 1fr) minmax(200px, 40%);
+    grid-template-areas:
+      "dock dock"
+      "score video";
   }
-  .cello-app--focus .cello-yt {
-    position: sticky;
-    top: 10px;
-    align-self: start;
+  .cello-dock {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
   }
+  .cello-dock-main,
+  .cello-dock-more { flex-direction: row; flex: 0 0 auto; }
+  .cello-dock .cello-btn,
+  .cello-dock .cello-upload-btn { width: auto; min-width: 88px; }
+  .cello-piece-wrap { flex: 1 1 140px; }
+  .cello-dock .cello-status,
+  .cello-dock .cello-tuner-row { flex: 1 1 100%; }
 }
-.cello-score-wrap { min-width: 0; }
 .cello-pdf-bar {
   display: flex;
   align-items: center;
@@ -2133,7 +2163,7 @@ select:focus-visible {
   text-align: center;
 }
 .cello-score {
-  min-height: 220px;
+  min-height: min(70vh, 720px);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   padding: 10px;
@@ -2142,21 +2172,44 @@ select:focus-visible {
 }
 .cello-score--pdf { padding: 0; background: #f4f1ea; }
 .cello-score--follow {
+  position: relative;
   background: #fbfaf6;
   min-height: 280px;
   overflow: auto;
 }
 .cello-score--follow svg { max-width: 100%; }
-.cello-score .cello-cursor,
-.cello-score [id^="cursorImg"],
-.cello-score img.cursor {
-  outline: 2px solid var(--accent);
-  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 28%, transparent);
-  border-radius: 3px;
+.cello-score--follow [id^="cursorImg"],
+.cello-score--follow img.cursor,
+.cello-score--follow .osmd-cursor {
+  display: none !important;
+}
+.cello-hl-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.cello-hl {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.cello-hl--now {
+  background: color-mix(in srgb, var(--accent) 74%, transparent);
+  outline: 1.5px solid var(--accent);
+}
+.cello-hl--soon {
+  background: hsl(calc(8 + var(--hi, 1) * 16) 86% 50% / calc(var(--hl, 0.4) * 0.5));
+  outline: 1px solid hsl(calc(8 + var(--hi, 1) * 16) 86% 42% / calc(var(--hl, 0.4) * 0.85));
 }
 .cello-pdf-canvas { display: block; width: 100%; height: auto; }
 .cello-empty { color: var(--muted); font-size: 12px; }
 .cello-yt {
+  grid-area: video;
+  position: sticky;
+  top: 10px;
+  align-self: start;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   padding: 12px;
@@ -2198,7 +2251,7 @@ select:focus-visible {
 }
 .cello-yt-form .cello-yt-input { margin-bottom: 0; }
 .cello-yt-status { font-size: 12px; color: var(--secondary); min-height: 1.2em; }
-.cello-yt-results { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; max-height: 220px; overflow: auto; }
+.cello-yt-results { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; max-height: min(36vh, 280px); overflow: auto; }
 .cello-yt-hit {
   display: flex;
   gap: 8px;
@@ -2219,7 +2272,7 @@ select:focus-visible {
   background: var(--bg);
   border-radius: var(--r-sm);
   overflow: hidden;
-  margin: 8px 0;
+  margin: 0 0 8px;
 }
 .cello-yt-player iframe { width: 100%; height: 100%; border: 0; }
 .cello-yt-hint { margin: 12px; font-size: 12px; color: var(--muted); }
@@ -2238,24 +2291,8 @@ select:focus-visible {
   color: var(--display);
 }
 
-@media (max-width: 719px) {
-  .cello-dock {
-    top: 0;
-    flex-direction: row;
-    flex-wrap: wrap;
+@media (max-width: 520px) {
+  .cello-studio {
+    grid-template-columns: minmax(0, 1fr) minmax(168px, 42%);
   }
-  .cello-dock .cello-btn,
-  .cello-dock .cello-upload-btn { width: auto; flex: 1 1 30%; }
-  .cello-dock .cello-status,
-  .cello-dock .cello-tuner-row { flex: 1 1 100%; }
-  .cello-app--focus .cello-yt {
-    position: sticky;
-    top: 0;
-    z-index: 7;
-    order: -1;
-  }
-  .cello-studio { display: flex; flex-direction: column; }
-  .cello-dock { order: 0; }
-  .cello-score-wrap { order: 2; }
-  .cello-app--focus .cello-yt { order: 1; }
 }

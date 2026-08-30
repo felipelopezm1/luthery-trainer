@@ -25,8 +25,21 @@ const TrainerAudio = (() => {
   let compareResult = null; // { ok, msg }
   let activeNotes = new Set();
   const METRO_KEY = 'music_bele_metro_bpm';
+  const METRO_VOICE_KEY = 'music_bele_metro_voice';
+  const METRO_VOICES = [
+    { id: 'tick', kind: 'synth' },
+    { id: 'wood', sf: 'woodblock', hi: 76, lo: 74, dur: 0.08 },
+    { id: 'drum', sf: 'taiko_drum', hi: 50, lo: 41, dur: 0.12 },
+    { id: 'agogo', sf: 'agogo', hi: 67, lo: 60, dur: 0.1 },
+    { id: 'piano', sf: 'acoustic_grand_piano', hi: 76, lo: 72, dur: 0.08 },
+    { id: 'cello', sf: 'cello', hi: 45, lo: 40, dur: 0.16 },
+    { id: 'violin', sf: 'violin', hi: 69, lo: 64, dur: 0.12 },
+    { id: 'guitar', sf: 'acoustic_guitar_nylon', hi: 64, lo: 59, dur: 0.1 },
+  ];
+  let metroInst = null;
   let metro = {
     bpm: parseInt(localStorage.getItem(METRO_KEY), 10) || 72,
+    voice: localStorage.getItem(METRO_VOICE_KEY) || 'wood',
     running: false,
     beat: 0,
     beats: 4,
@@ -35,6 +48,10 @@ const TrainerAudio = (() => {
     raf: null,
     next: 0,
   };
+
+  function metroVoiceDef() {
+    return METRO_VOICES.find(v => v.id === metro.voice) || METRO_VOICES[1];
+  }
 
   function metroClicks(beats, beatType) {
     const b = Math.max(1, Math.min(12, Math.round(beats) || 4));
@@ -343,13 +360,63 @@ const TrainerAudio = (() => {
     });
   }
 
+  function clickSynth(accent) {
+    const ctx = ensureCtx();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'square';
+    o.frequency.value = accent ? 1400 : 980;
+    g.gain.value = 0;
+    o.connect(g); g.connect(master || ctx.destination);
+    const t = ctx.currentTime;
+    g.gain.setValueAtTime(accent ? 0.22 : 0.14, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + (accent ? 0.07 : 0.05));
+    o.start(t); o.stop(t + 0.08);
+  }
+
   function metroTick(accent) {
     ensureCtx();
-    const m = accent ? 77 : 76;
-    if (instrument) instrument.play(m, ac.currentTime, { duration: 0.07, gain: accent ? 0.8 : 0.5 });
-    else oscPlay(m, 0.05, 0, accent ? 0.45 : 0.28);
+    const def = metroVoiceDef();
+    const gain = accent ? 0.8 : 0.48;
+    if (def.sf && metroInst) {
+      metroInst.play(accent ? def.hi : def.lo, ac.currentTime, { duration: def.dur || 0.08, gain });
+    } else {
+      clickSynth(accent);
+    }
     pulseViz();
     updateMetroLights();
+  }
+
+  function paintMetroVoice() {
+    const sel = document.getElementById('metro-voice');
+    if (!sel) return;
+    sel.innerHTML = METRO_VOICES.map(v => {
+      const label = t(`metro_voice_${v.id}`);
+      return `<option value="${v.id}"${v.id === metro.voice ? ' selected' : ''}>${label}</option>`;
+    }).join('');
+    sel.setAttribute('aria-label', t('metro_voice_aria'));
+  }
+
+  async function loadMetroVoice(id, preview) {
+    const def = METRO_VOICES.find(v => v.id === id) || METRO_VOICES[0];
+    metro.voice = def.id;
+    localStorage.setItem(METRO_VOICE_KEY, def.id);
+    paintMetroVoice();
+    if (!def.sf || typeof Soundfont === 'undefined') {
+      metroInst = null;
+      if (preview) metroTick(true);
+      return;
+    }
+    try {
+      ensureCtx();
+      metroInst = await Soundfont.instrument(ac, def.sf, {
+        soundfont: SF_PACK,
+        destination: master,
+      });
+    } catch (e) {
+      console.warn('[metro] voice', def.sf, e);
+      metroInst = null;
+    }
+    if (preview) metroTick(true);
   }
 
   function rebuildMetroLights() {
@@ -553,6 +620,8 @@ const TrainerAudio = (() => {
     const def = INSTRUMENTS.find(i => i.id === currentId) || INSTRUMENTS[0];
     setInstrStatus(t('instr_loading', { n: instrLabel(def.id) }));
     loadInstrument(currentId);
+    paintMetroVoice();
+    loadMetroVoice(metro.voice, false);
     connectMidi();
     syncMetroUI();
     document.addEventListener('pointerdown', () => { if (!midiAccess) connectMidi(); }, { once: true });
@@ -583,6 +652,9 @@ const TrainerAudio = (() => {
     document.getElementById('metro-bpm')?.addEventListener('input', e => {
       setMetroBpm(+e.target.value);
     });
+    document.getElementById('metro-voice')?.addEventListener('change', e => {
+      loadMetroVoice(e.target.value, true);
+    });
   }
 
   function onLangChange() {
@@ -591,6 +663,7 @@ const TrainerAudio = (() => {
     renderMidiSelect();
     if (activeInput) setMidiStatus(t('midi_connected', { n: activeInput.name || activeInput.id }));
     else if (!midiAccess) setMidiStatus(t('midi_prompt'));
+    paintMetroVoice();
   }
 
   return {

@@ -17,6 +17,8 @@ const ScoreFollow = (() => {
   let onCursor = null;
   let lastBpm = 72;
   let lastXml = null;
+  let hlLayer = null;
+  const LOOKAHEAD = 8;
 
   const DYN_NAME = { ppp: 0.16, pp: 0.22, p: 0.32, mp: 0.4, mf: 0.5, f: 0.62, ff: 0.75, fff: 0.88 };
 
@@ -410,14 +412,107 @@ const ScoreFollow = (() => {
     } catch (e) {
       console.warn('[ScoreFollow] cursor', e);
     }
-    boostHighlight();
   }
 
-  function boostHighlight() {
-    if (!host) return;
-    host.querySelectorAll('[id^="cursorImg"], .osmd-cursor, img.cursor, .cursor').forEach(el => {
-      el.classList.add('cello-cursor');
+  function ensureHlLayer() {
+    if (!host) return null;
+    hlLayer = host.querySelector('.cello-hl-layer');
+    if (!hlLayer) {
+      hlLayer = document.createElement('div');
+      hlLayer.className = 'cello-hl-layer';
+      hlLayer.setAttribute('aria-hidden', 'true');
+      host.appendChild(hlLayer);
+    }
+    return hlLayer;
+  }
+
+  function clearHighlight() {
+    if (hlLayer) hlLayer.innerHTML = '';
+  }
+
+  function domNoteheads() {
+    if (!host) return [];
+    const origin = host.getBoundingClientRect();
+    return [...host.querySelectorAll('.vf-notehead')].map(el => {
+      const r = el.getBoundingClientRect();
+      return {
+        x: r.left - origin.left + host.scrollLeft,
+        y: r.top - origin.top + host.scrollTop,
+        w: Math.max(r.width, 10),
+        h: Math.max(r.height, 8),
+      };
     });
+  }
+
+  function walkGraphic() {
+    const out = [];
+    const list = osmd?.graphic?.measureList;
+    if (!list) return out;
+    const visit = measure => {
+      if (!measure?.staffEntries) return;
+      for (const se of measure.staffEntries) {
+        const q = (se.absoluteTimestamp?.realValue ?? 0) * 4;
+        for (const ve of se.graphicalVoiceEntries || []) {
+          for (const gn of ve.notes || []) {
+            const src = gn.sourceNote;
+            if (!src || src.isRest?.()) continue;
+            const midi = src.halfTone != null ? src.halfTone + 12 : null;
+            out.push({ startQ: q, midi });
+          }
+        }
+      }
+    };
+    for (const staff of list) {
+      (Array.isArray(staff) ? staff : [staff]).forEach(visit);
+    }
+    return out;
+  }
+
+  function locateNotes() {
+    const heads = domNoteheads();
+    const graphic = walkGraphic();
+    if (graphic.length && heads.length) {
+      const n = Math.min(graphic.length, heads.length);
+      const paired = [];
+      for (let i = 0; i < n; i++) paired.push({ ...graphic[i], ...heads[i] });
+      const used = new Set();
+      return playNotes.map(note => {
+        let best = -1, bestD = 1e9;
+        paired.forEach((g, i) => {
+          if (used.has(i)) return;
+          const dq = Math.abs((g.startQ ?? 0) - note.startQ);
+          const dm = g.midi != null ? Math.abs(g.midi - note.midi) : 0;
+          const d = dq * 5 + dm * 0.2;
+          if (d < bestD) { bestD = d; best = i; }
+        });
+        if (best < 0) return null;
+        used.add(best);
+        return paired[best];
+      });
+    }
+    return playNotes.map((_, i) => heads[i] || null);
+  }
+
+  function paintSpectrum(idx) {
+    const layer = ensureHlLayer();
+    if (!layer || !playNotes.length) return;
+    const boxes = locateNotes();
+    layer.innerHTML = '';
+    for (let i = 0; i < LOOKAHEAD; i++) {
+      const box = boxes[idx + i];
+      if (!box) continue;
+      const el = document.createElement('i');
+      el.className = i === 0 ? 'cello-hl cello-hl--now' : 'cello-hl cello-hl--soon';
+      const padX = 2, padY = 1.5;
+      el.style.left = `${box.x - padX}px`;
+      el.style.top = `${box.y - padY}px`;
+      el.style.width = `${box.w + padX * 2}px`;
+      el.style.height = `${box.h + padY * 2}px`;
+      el.style.setProperty('--hl', String(Math.max(0.08, 1 - i / LOOKAHEAD)));
+      el.style.setProperty('--hi', String(i));
+      layer.appendChild(el);
+    }
+    layer.querySelector('.cello-hl--now')?.scrollIntoView({ block: 'nearest', inline: 'center' });
   }
 
   async function renderOsmd(el) {
@@ -425,17 +520,19 @@ const ScoreFollow = (() => {
     if (!ns || !lastXml) return false;
     const Ctor = ns.OpenSheetMusicDisplay || ns;
     el.innerHTML = '';
+    hlLayer = null;
     osmd = new Ctor(el, {
       autoResize: true,
       drawTitle: false,
       followCursor: true,
       drawingParameters: 'compact',
-      cursorsOptions: [{ type: 0, color: '#D71921', alpha: 0.42, follow: true }],
-      cursorOptions: [{ type: 0, color: '#D71921', alpha: 0.42, follow: true }],
+      cursorsOptions: [{ type: 1, color: '#D71921', alpha: 0, follow: true }],
+      cursorOptions: [{ type: 1, color: '#D71921', alpha: 0, follow: true }],
     });
     await osmd.load(lastXml);
     await osmd.render();
     try { osmd.cursor?.hide?.(); } catch {}
+    ensureHlLayer();
     return true;
   }
 
@@ -494,6 +591,7 @@ const ScoreFollow = (() => {
       if (window.PitchDetect) window.PitchDetect.setTarget(n.midi);
       window.CelloEngine?.play(n.midi, Math.min(Math.max(n.durSec, 0.12), 4), 0, n.gain ?? 0.45);
       seekCursor(n.startQ);
+      paintSpectrum(cursorIdx);
       if (onCursor) onCursor(cursorIdx, n);
       cursorIdx++;
     }
@@ -532,6 +630,7 @@ const ScoreFollow = (() => {
     cursorIdx = 0;
     currentTarget = null;
     seekCursor(playNotes[0]?.startQ || 0);
+    paintSpectrum(0);
     if (window.TrainerAudio?.setMetroMeter) window.TrainerAudio.setMetroMeter(meta.beats, meta.beatType);
     if (window.TrainerAudio?.setMetroBpm) window.TrainerAudio.setMetroBpm(lastBpm);
     loop();
@@ -553,6 +652,7 @@ const ScoreFollow = (() => {
     if (raf) cancelAnimationFrame(raf);
     raf = null;
     try { osmd?.cursor?.reset?.(); osmd?.cursor?.hide?.(); } catch {}
+    clearHighlight();
     window.PitchDetect?.setTarget(null);
   }
 

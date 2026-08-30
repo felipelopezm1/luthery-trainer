@@ -59,6 +59,10 @@
       <input type="range" class="metro-bpm" id="metro-bpm" min="40" max="208" value="72" data-i18n-aria="metro_bpm_aria" aria-label="Pulsos por minuto">
       <b id="metro-bpm-val">72</b><span class="metro-unit">BPM</span>
     </label>
+    <label class="metro-voice-wrap">
+      <span class="metro-unit" data-i18n="metro_voice">Sonido</span>
+      <select id="metro-voice" class="metro-voice" data-i18n-aria="metro_voice_aria" aria-label="Sonido del metrónomo"></select>
+    </label>
     <div class="metro-lights" id="metro-lights" aria-hidden="true">
       <span></span><span></span><span></span><span></span>
     </div>
@@ -182,8 +186,8 @@
 <script src="js/pitch-detect.js"></script>
 <script src="js/score-follow.js"></script>
 <script src="js/score-pdf.js"></script>
-<script src="js/cello-sfz.js"></script>
-<script src="js/cello.js"></script>
+<script src="js/cello-sfz.js?v=2"></script>
+<script src="js/cello.js?v=2"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

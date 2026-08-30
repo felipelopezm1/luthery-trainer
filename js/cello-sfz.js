@@ -1,12 +1,27 @@
-/* CelloEngine — Karoryfer x bigcat cello is the intended SFZ source
+/* CelloEngine — string-family tones for the cello room.
+   Karoryfer × bigcat cello is the intended SFZ source
    https://github.com/sfzinstruments/karoryfer-bigcat.cello
-   Full bank is 126MB (Sforzando/Kontakt). v1 uses MusyngKite cello soundfont;
-   drop trimmed SFZ samples in assets/cello-sfz/ later for sfizz WASM. */
+   v1 uses MusyngKite soundfonts; drop trimmed SFZ samples in assets/cello-sfz/ later. */
 const CelloEngine = (() => {
+  const STRINGS = [
+    { id: 'cello', sf: 'cello', midi: 45 },
+    { id: 'viola', sf: 'viola', midi: 57 },
+    { id: 'violin', sf: 'violin', midi: 69 },
+    { id: 'bass', sf: 'contrabass', midi: 33 },
+    { id: 'pizz', sf: 'pizzicato_strings', midi: 57 },
+    { id: 'ensemble', sf: 'string_ensemble_1', midi: 60 },
+  ];
+  const STORE = 'music_bele_cello_string';
+
   let engine = 'osc';
   let ac = null;
   let inst = null;
   let ready = null;
+  let currentId = localStorage.getItem(STORE) || 'cello';
+
+  function defOf(id) {
+    return STRINGS.find(s => s.id === id) || STRINGS[0];
+  }
 
   function ensureCtx() {
     if (window.TrainerAudio?.getContext) {
@@ -34,27 +49,34 @@ const CelloEngine = (() => {
     o.start(t); o.stop(t + dur + 0.05);
   }
 
-  async function init() {
-    if (ready) return ready;
+  async function load(id, preview) {
+    const def = defOf(id);
+    currentId = def.id;
+    localStorage.setItem(STORE, def.id);
     ready = (async () => {
-      if (window.sfizz || window.Sfizz) {
-        engine = 'sfz';
+      if (typeof Soundfont === 'undefined') {
+        engine = 'osc';
+        inst = null;
         return engine;
       }
-      if (typeof Soundfont !== 'undefined') {
-        try {
-          ensureCtx();
-          inst = await Soundfont.instrument(ac, 'cello', { soundfont: 'MusyngKite' });
-          engine = 'soundfont';
-          return engine;
-        } catch (e) {
-          console.warn('[CelloEngine] soundfont cello failed', e);
-        }
+      try {
+        ensureCtx();
+        inst = await Soundfont.instrument(ac, def.sf, { soundfont: 'MusyngKite' });
+        engine = 'soundfont';
+      } catch (e) {
+        console.warn('[CelloEngine] soundfont', def.sf, e);
+        inst = null;
+        engine = 'osc';
       }
-      engine = 'osc';
       return engine;
     })();
-    return ready;
+    await ready;
+    if (preview) play(def.midi, 0.7, 0, 0.55);
+    return engine;
+  }
+
+  async function init() {
+    return load(currentId, false);
   }
 
   function play(midi, dur = 0.8, when = 0, gain = 0.7) {
@@ -69,7 +91,12 @@ const CelloEngine = (() => {
     oscPlay(midi, dur, when, gain);
   }
 
-  return { init, play, engineName: () => engine };
+  return {
+    init, load, play,
+    list: () => STRINGS.slice(),
+    getId: () => currentId,
+    engineName: () => engine,
+  };
 })();
 
 window.CelloEngine = CelloEngine;

@@ -4,6 +4,7 @@ const Cello = (() => {
   const YT_KEY = 'music_bele_cello_yt';
   const EXAMPLE = {
     id: 'vivaldi-rv40-largo',
+    title: 'Vivaldi · RV 40 · Largo',
     url: 'scores/vivaldi-rv40-largo.xml',
     pdf: 'scores/vivaldi-op14-cello-sonatas.pdf',
     bpm: 50,
@@ -36,11 +37,14 @@ const Cello = (() => {
   }
 
   function syncListenUI() {
+    const on = listenOn();
     const btn = document.getElementById('cello-listen');
     if (btn) {
-      btn.classList.toggle('on', listenOn());
-      btn.setAttribute('aria-pressed', listenOn() ? 'true' : 'false');
+      btn.classList.toggle('on', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
+    const tuner = document.getElementById('cello-tuner-row');
+    if (tuner) tuner.hidden = !on;
   }
 
   function setMode(on) {
@@ -186,11 +190,14 @@ const Cello = (() => {
 
   function renderYtSaved() {
     const host = document.getElementById('cello-yt-saved');
+    const label = document.getElementById('cello-yt-saved-label');
     if (!host) return;
     const list = savedVideos();
+    if (label) label.hidden = !list.length;
+    host.hidden = !list.length;
     host.innerHTML = list.length
       ? list.map(v => `<button type="button" class="cello-yt-chip" data-yt-play="${v.id}" title="${esc(v.title)}">${esc(v.title)}</button>`).join('')
-      : `<p class="cello-yt-hint">${t('cello_yt_none')}</p>`;
+      : '';
   }
 
   function esc(s) {
@@ -221,13 +228,16 @@ const Cello = (() => {
       </button>`).join('');
   }
 
-  function addPasted() {
-    const inp = document.getElementById('cello-yt-paste');
-    const id = parseVideoId(inp?.value);
+  function submitYtQuery() {
+    const inp = document.getElementById('cello-yt-q');
+    const q = inp?.value.trim();
+    if (!q) return;
+    const id = parseVideoId(q);
     if (id) {
-      addVideo(id, inp.value);
-      inp.value = '';
+      addVideo(id, q);
+      return;
     }
+    searchYoutube(q);
   }
 
   async function searchYoutube(q) {
@@ -280,6 +290,19 @@ const Cello = (() => {
     sel.innerHTML = catalog.map(p => `<option value="${esc(p.id)}"${p.id === pieceId ? ' selected' : ''}>${esc(p.title || p.id)}</option>`).join('');
   }
 
+  function stringLabel(id) {
+    return t(`instr_${id}`) || id;
+  }
+
+  function paintStringSelect() {
+    const sel = document.getElementById('cello-string');
+    if (!sel || !window.CelloEngine?.list) return;
+    const cur = window.CelloEngine.getId?.() || 'cello';
+    sel.innerHTML = window.CelloEngine.list().map(s => (
+      `<option value="${esc(s.id)}"${s.id === cur ? ' selected' : ''}>${esc(stringLabel(s.id))}</option>`
+    )).join('');
+  }
+
   function scoreMeta() {
     return window.ScoreFollow?.getMeta?.() || { bpm: EXAMPLE.bpm, beats: 3, beatType: 4 };
   }
@@ -307,6 +330,8 @@ const Cello = (() => {
     const piece = catalog.find(p => p.id === id) || currentPiece();
     pieceId = piece.id;
     paintPieceSelect();
+    const title = document.querySelector('.cello-title');
+    if (title && piece.title) title.textContent = piece.title;
     const q = document.getElementById('cello-yt-q');
     if (q && piece.ytQuery) q.value = piece.ytQuery;
     const st = document.getElementById('cello-status');
@@ -344,24 +369,32 @@ const Cello = (() => {
       </header>
       <div class="cello-studio">
         <aside class="cello-dock" aria-label="${t('cello_play')}">
-          <button type="button" class="cello-btn cello-btn--play" id="cello-play" aria-pressed="false">${t('cello_play')}</button>
-          <button type="button" class="cello-btn" id="cello-stop">${t('cello_stop')}</button>
-          <button type="button" class="cello-btn cello-listen-btn${on ? ' on' : ''}" id="cello-listen" aria-pressed="${on}">${t('cello_listen')}</button>
-          <label class="cello-btn cello-upload-btn">
-            <input type="file" id="cello-upload" accept=".pdf,.xml,.musicxml,.mxl,.mid,.midi" hidden>
-            ${t('cello_upload')}
-          </label>
+          <div class="cello-dock-main">
+            <button type="button" class="cello-btn cello-btn--play" id="cello-play" aria-pressed="false">${t('cello_play')}</button>
+            <button type="button" class="cello-btn" id="cello-stop">${t('cello_stop')}</button>
+          </div>
           <label class="cello-piece-wrap">
             <span>${t('cello_piece_pick')}</span>
             <select id="cello-piece" class="cello-piece" aria-label="${t('cello_piece_pick')}"></select>
+          </label>
+          <label class="cello-piece-wrap">
+            <span>${t('cello_string')}</span>
+            <select id="cello-string" class="cello-piece" aria-label="${t('cello_string')}"></select>
           </label>
           <div class="cello-pdf-bar" id="cello-pdf-bar" hidden>
             <button type="button" class="cello-btn" id="cello-pdf-prev" aria-label="${t('cello_pdf_prev')}">‹</button>
             <span id="cello-pdf-info">—</span>
             <button type="button" class="cello-btn" id="cello-pdf-next" aria-label="${t('cello_pdf_next')}">›</button>
           </div>
+          <div class="cello-dock-more">
+            <button type="button" class="cello-btn cello-listen-btn${on ? ' on' : ''}" id="cello-listen" aria-pressed="${on}">${t('cello_listen')}</button>
+            <label class="cello-btn cello-upload-btn">
+              <input type="file" id="cello-upload" accept=".pdf,.xml,.musicxml,.mxl,.mid,.midi" hidden>
+              ${t('cello_upload')}
+            </label>
+          </div>
           <p class="cello-status" id="cello-status" aria-live="polite">${t('cello_ready')}</p>
-          <div class="cello-tuner-row">
+          <div class="cello-tuner-row" id="cello-tuner-row" ${on ? '' : 'hidden'}>
             <b id="cello-tuner">—</b>
             <div class="cello-cents" id="cello-cents" aria-hidden="true"><i></i></div>
           </div>
@@ -370,8 +403,11 @@ const Cello = (() => {
           <div class="cello-score" id="cello-score"></div>
         </div>
         <aside class="cello-yt" aria-label="${t('cello_yt_label')}">
+          <div class="cello-yt-player">
+            <iframe id="cello-yt-frame" hidden title="YouTube" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe>
+            <p class="cello-yt-hint" id="cello-yt-empty">${t('cello_yt_empty')}</p>
+          </div>
           <div class="cello-yt-now" id="cello-yt-now" hidden>
-            <h2 class="cello-yt-title">${t('cello_yt_label')}</h2>
             <p class="cello-yt-now-title" id="cello-yt-now-title"></p>
             <button type="button" class="cello-btn" id="cello-yt-change">${t('cello_yt_change')}</button>
           </div>
@@ -381,18 +417,10 @@ const Cello = (() => {
               <input type="search" class="cello-yt-input" id="cello-yt-q" value="${esc(EXAMPLE.ytQuery)}" placeholder="${t('cello_yt_ph')}" autocomplete="off">
               <button type="submit" class="cello-btn">${t('cello_yt_go')}</button>
             </form>
-            <form class="cello-yt-form" id="cello-yt-paste-form">
-              <input type="url" class="cello-yt-input" id="cello-yt-paste" placeholder="${t('cello_yt_paste')}" autocomplete="off">
-              <button type="submit" class="cello-btn">${t('cello_yt_add')}</button>
-            </form>
             <p class="cello-yt-status" id="cello-yt-status"></p>
             <div class="cello-yt-results" id="cello-yt-results"></div>
-            <h3 class="cello-yt-saved-label">${t('cello_yt_saved')}</h3>
-            <div class="cello-yt-saved" id="cello-yt-saved"></div>
-          </div>
-          <div class="cello-yt-player">
-            <iframe id="cello-yt-frame" hidden title="YouTube" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe>
-            <p class="cello-yt-hint" id="cello-yt-empty">${t('cello_yt_empty')}</p>
+            <h3 class="cello-yt-saved-label" id="cello-yt-saved-label" hidden>${t('cello_yt_saved')}</h3>
+            <div class="cello-yt-saved" id="cello-yt-saved" hidden></div>
           </div>
         </aside>
       </div>
@@ -429,11 +457,13 @@ const Cello = (() => {
         }
         return;
       }
-      if (e.target.id === 'cello-yt-paste') addPasted();
       if (e.target.id === 'cello-piece' && e.target.value) {
         if (following) stopFollow(false);
         exampleLoaded = false;
         loadExample(e.target.value);
+      }
+      if (e.target.id === 'cello-string' && e.target.value) {
+        window.CelloEngine?.load?.(e.target.value, true);
       }
     });
     document.addEventListener('keydown', e => {
@@ -445,13 +475,7 @@ const Cello = (() => {
     document.addEventListener('submit', e => {
       if (e.target.id === 'cello-yt-form') {
         e.preventDefault();
-        const q = document.getElementById('cello-yt-q')?.value.trim();
-        if (q) searchYoutube(q);
-        return;
-      }
-      if (e.target.id === 'cello-yt-paste-form') {
-        e.preventDefault();
-        addPasted();
+        submitYtQuery();
       }
     });
     document.addEventListener('click', e => {
@@ -482,18 +506,13 @@ const Cello = (() => {
     const stage = document.getElementById('page-stage');
     if (stage) stage.dataset.mod = 'cello';
     window.CelloEngine?.init();
+    paintStringSelect();
     if (listenOn()) startMic();
     syncListenUI();
     await loadCatalog();
     renderYtSaved();
     if (ytCurrent) setPlayer(ytCurrent, ytTitle);
     else syncFocus();
-    const q = document.getElementById('cello-yt-q')?.value.trim();
-    const box = document.getElementById('cello-yt-results');
-    if (!ytCurrent && q && box && !box.children.length && !box.dataset.searched) {
-      box.dataset.searched = '1';
-      searchYoutube(q);
-    }
     if (window.ScorePdf?.hasPdf()) {
       await showPdf();
     } else if (window.ScoreFollow?.getNotes?.()?.length) {
@@ -515,7 +534,7 @@ const Cello = (() => {
     if (stage) delete stage.dataset.mod;
   }
 
-  return { render, mount, leave, onLangChange() { syncListenUI(); } };
+  return { render, mount, leave, onLangChange() { syncListenUI(); paintStringSelect(); } };
 })();
 
 window.Cello = Cello;
