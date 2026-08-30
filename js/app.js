@@ -11,7 +11,7 @@ const DIFF = {
   hard:   { label: 'Difícil', count: 15, opts: 6, listens: 2,  timer: 25, chordBlock: true,  errLen: 8, teoTier: 3 }
 };
 const LEVEL_LECT = { easy: 'basico', medium: 'medio', hard: 'avanzado' };
-const MOD_SEC = { ritmo: 'rt', errores: 'err', acordes: 'ac', lectura: 'lect', teoria: 'teo' };
+const MOD_SEC = { ritmo: 'rt', errores: 'err', acordes: 'ac', lectura: 'lect', teoria: 'teo', cello: 'cel' };
 
 function cfg() {
   const base = DIFF[state.level];
@@ -22,11 +22,17 @@ function exCount() { return cfg().count; }
 /* ── persistence ── */
 function nH() {
   return {
-    log: [], scores: { lect: { c: 0, t: 0 }, ac: { c: 0, t: 0 }, rt: { c: 0, t: 0 }, teo: { c: 0, t: 0 }, err: { c: 0, t: 0 } },
+    log: [], scores: { lect: { c: 0, t: 0 }, ac: { c: 0, t: 0 }, rt: { c: 0, t: 0 }, teo: { c: 0, t: 0 }, err: { c: 0, t: 0 }, cel: { c: 0, t: 0 } },
     streak: 0, best: 0, noteErr: {}, byLevel: { easy: { c: 0, t: 0 }, medium: { c: 0, t: 0 }, hard: { c: 0, t: 0 } }
   };
 }
-function loadH() { try { return { ...nH(), ...JSON.parse(localStorage.getItem(HIST_KEY)) }; } catch { return nH(); } }
+function loadH() {
+  try {
+    const h = { ...nH(), ...JSON.parse(localStorage.getItem(HIST_KEY)) };
+    h.scores = { ...nH().scores, ...(h.scores || {}) };
+    return h;
+  } catch { return nH(); }
+}
 function saveH(skipSync) {
   try { localStorage.setItem(HIST_KEY, JSON.stringify(H)); } catch {}
   if (!skipSync && window.BeleSync) window.BeleSync.schedulePush(() => H, () => state.level);
@@ -63,6 +69,8 @@ function updSc() {
   });
   const errEl = document.getElementById('sc-err');
   if (errEl) errEl.textContent = `${H.scores.err.c}/${H.scores.err.t}`;
+  const celEl = document.getElementById('sc-cel');
+  if (celEl && H.scores.cel) celEl.textContent = `${H.scores.cel.c}/${H.scores.cel.t}`;
 }
 
 /* ── session (per exercise page) ── */
@@ -207,13 +215,14 @@ function makeRenderer(el, w, h) {
   r.resize(w, h);
   return r;
 }
-function drawSingleNote(el, key, acc, highlight) {
+function drawSingleNote(el, key, acc, highlight, clef = 'treble') {
+  if (!el) return;
   const w = Math.min(vexW(), 300);
-  const r = makeRenderer(el, w, 100);
+  const r = makeRenderer(el, w, 110);
   const ctx = r.getContext();
-  const stave = new Stave(10, 10, w - 30).addClef('treble').addTimeSignature('4/4');
+  const stave = new Stave(10, 10, w - 30).addClef(clef).addTimeSignature('4/4');
   stave.setContext(ctx).draw();
-  const n = new StaveNote({ clef: 'treble', keys: [key], duration: 'w' });
+  const n = new StaveNote({ clef, keys: [key], duration: 'w' });
   if (acc) n.addModifier(new Accidental(acc));
   n.setStyle({ fillStyle: highlight || '#EDEDED', strokeStyle: highlight || '#EDEDED' });
   const voice = new Voice({ num_beats: 4, beat_value: 4 });
@@ -364,6 +373,7 @@ const state = {
   rt: { series: [] },
   err: { series: [] },
   teo: { order: [] },
+  cello: { series: [] },
   run: null
 };
 
@@ -390,19 +400,19 @@ function moduleMeta(mod) {
 
 function pageCount(mod) {
   if (mod === 'inicio') return 3;
-  if (mod === 'historial') return 1;
+  if (mod === 'historial' || mod === 'playground' || mod === 'cello') return 1;
   if (mod === 'teoria') return 2 + exCount();
   return 3 + exCount();
 }
 
 function isExercisePage() {
-  if (['inicio', 'historial'].includes(state.mod)) return false;
+  if (['inicio', 'historial', 'playground', 'cello'].includes(state.mod)) return false;
   const m = moduleMeta(state.mod);
   return state.page >= m.exStart && state.page < m.results;
 }
 
 function isResultsPage() {
-  if (['inicio', 'historial'].includes(state.mod)) return false;
+  if (['inicio', 'historial', 'playground', 'cello'].includes(state.mod)) return false;
   return state.page === moduleMeta(state.mod).results;
 }
 
@@ -450,6 +460,7 @@ function goPage(n) {
 function setMod(mod) {
   clearAdvanceTimer();
   if (state.mod === 'playground' && mod !== 'playground') window.Playground?.leave();
+  if (state.mod === 'cello' && mod !== 'cello') window.Cello?.leave();
   state.mod = mod;
   state.page = 0;
   resetSession();
@@ -465,6 +476,7 @@ function setLevel(lvl) {
   state.rt.series = [];
   state.err.series = [];
   state.teo.order = [];
+  state.cello.series = [];
   if (isExercisePage()) state.page = 1;
   resetSession();
   render();
@@ -491,6 +503,11 @@ function startRt() {
 function startErr() {
   beginRun('err');
   state.err.series = Array.from({ length: exCount() }, () => genErrExercise(cfg().errLen, state.level));
+}
+function startCello() {
+  beginRun('cel');
+  const pool = window.Cello?.CELLO_POOL || [];
+  state.cello.series = pickSeries(pool, exCount());
 }
 function startTeo() {
   beginRun('teo');
@@ -809,8 +826,8 @@ function renderTeoria() {
 function renderHistorial() {
   const total = H.log.length, correct = H.log.filter(x => x.ok).length;
   const pct = total ? Math.round(correct / total * 100) : 0;
-  const secKeys = { lect: 'sec_lect', ac: 'sec_ac', rt: 'sec_rt', teo: 'sec_teo', err: 'sec_err' };
-  const secs = ['lect', 'ac', 'rt', 'teo', 'err'].map(id => ({ id, label: t(secKeys[id]) }));
+  const secKeys = { lect: 'sec_lect', ac: 'sec_ac', rt: 'sec_rt', teo: 'sec_teo', err: 'sec_err', cel: 'sec_cel' };
+  const secs = ['lect', 'ac', 'rt', 'teo', 'err', 'cel'].map(id => ({ id, label: t(secKeys[id]) }));
   const bars = secs.map(s => {
     const sc = H.scores[s.id];
     const p = sc.t ? Math.round(sc.c / sc.t * 100) : 0;
@@ -887,7 +904,7 @@ function render() {
   const stage = document.getElementById('page-stage');
   const seqLabels = {
     ritmo: t('seq_rt'), errores: t('seq_err'), acordes: t('seq_ac'),
-    lectura: t('seq_lect'), teoria: t('seq_teo'),
+    lectura: t('seq_lect'), teoria: t('seq_teo'), cello: t('seq_cel'),
   };
   if (isResultsPage()) {
     const total = pageCount(state.mod);
@@ -895,7 +912,7 @@ function render() {
     postRender();
     return;
   }
-  const map = { inicio: renderInicio, ritmo: renderRitmo, errores: renderErrores, acordes: renderAcordes, lectura: renderLectura, teoria: renderTeoria, historial: renderHistorial, playground: () => window.Playground?.render() || '' };
+  const map = { inicio: renderInicio, ritmo: renderRitmo, errores: renderErrores, acordes: renderAcordes, lectura: renderLectura, teoria: renderTeoria, historial: renderHistorial, playground: () => window.Playground?.render() || '', cello: () => window.Cello?.render() || '' };
   stage.innerHTML = map[state.mod]() || '';
   postRender();
 }
@@ -904,7 +921,7 @@ function syncAudioTarget() {
   const TA = window.TrainerAudio;
   if (!TA) return;
   const { mod, page } = state;
-  if (!isExercisePage() || mod === 'inicio' || mod === 'historial' || mod === 'playground') { TA.clearTarget(); return; }
+  if (!isExercisePage() || ['inicio', 'historial', 'playground', 'cello'].includes(mod)) { TA.clearTarget(); return; }
   const idx = exerciseIndex();
   if (mod === 'lectura' && state.lect.series[idx]) {
     const n = state.lect.series[idx];
@@ -918,6 +935,9 @@ function syncAudioTarget() {
     TA.setTarget({ type: 'melody', midis: ex.written.map(n => keyToMidi(n.key)), label: t('target_melody_err') });
   } else if (mod === 'ritmo') {
     TA.setTarget({ type: 'melody', midis: [67, 60, 62, 64], label: t('target_pulse') });
+  } else if (mod === 'cello' && state.cello.series[idx]) {
+    const n = state.cello.series[idx];
+    TA.setTarget({ type: 'note', midis: [n.midi], label: noteDisplayName(n.name), pitchClass: false });
   } else TA.clearTarget();
 }
 
@@ -932,6 +952,8 @@ function postRender() {
   if (mod === 'lectura' && isExercisePage() && state.lect.series[exerciseIndex()]) {
     drawSingleNote(document.getElementById('vex-lect'), state.lect.series[exerciseIndex()].key, null);
   }
+  if (mod === 'cello') window.Cello?.mount();
+  else if (mod !== 'playground') window.Cello?.leave?.();
   if (isExercisePage() && cfg().timer > 0 && !state.session.interval && !state.session.answered) startTimer();
   updListenUI();
   syncAudioTarget();
@@ -939,12 +961,12 @@ function postRender() {
   if (mod === 'playground') window.Playground?.mount();
   else window.TrainerAudio?.setUserNoteHook?.(null);
   const paneLabel = document.querySelector('.pane-label');
-  if (paneLabel) paneLabel.textContent = mod === 'playground' ? t('pg_pane') : t('pane_exercise');
+  if (paneLabel) paneLabel.textContent = mod === 'playground' ? t('pg_pane') : mod === 'cello' ? t('cello_pane') : t('pane_exercise');
   if (window.StatsViz) window.StatsViz.refresh();
 }
 
 function btnValue(b) {
-  return b.dataset.lectAns ?? b.dataset.acAns ?? b.dataset.rtAns ?? b.dataset.errAns ?? b.dataset.teoAns;
+  return b.dataset.lectAns ?? b.dataset.acAns ?? b.dataset.rtAns ?? b.dataset.errAns ?? b.dataset.teoAns ?? b.dataset.celAns;
 }
 
 function bindFeedback(btn, fbId, ok, msgOk, msgNo, sec, lbl) {
@@ -980,6 +1002,7 @@ document.addEventListener('click', e => {
   if (e.target.closest('[data-action="start-rt"]')) { startRt(); goPage(2); return; }
   if (e.target.closest('[data-action="start-err"]')) { startErr(); goPage(2); return; }
   if (e.target.closest('[data-action="start-teo"]')) { startTeo(); goPage(1); return; }
+  if (e.target.closest('[data-action="start-cello"]')) { startCello(); goPage(2); return; }
   if (e.target.closest('[data-action="finish-run"]')) {
     state.run = null;
     setMod('inicio');
@@ -1006,6 +1029,13 @@ document.addEventListener('click', e => {
     const idx = exerciseIndex();
     if (kind === 'lect') {
       const n = state.lect.series[idx]; if (n) { playMidi(n.midi, 0, 1.1, 0.65); animWave('wave-lect', 1100); }
+    } else if (kind === 'cel') {
+      const n = state.cello.series[idx];
+      if (n) {
+        if (window.CelloEngine) window.CelloEngine.play(n.midi, 1.1, 0, 0.7);
+        else playMidi(n.midi, 0, 1.1, 0.65);
+        animWave('wave-cel', 1100);
+      }
     } else if (kind === 'lect-ref') {
       playMidi(60, 0, 0.8, 0.55);
       setTimeout(() => { const n = state.lect.series[idx]; if (n) playMidi(n.midi, 0, 1.1, 0.65); }, 900);
@@ -1034,6 +1064,12 @@ document.addEventListener('click', e => {
     return;
   }
 
+  const celBtn = e.target.closest('[data-cel-ans]');
+  if (celBtn && !celBtn.disabled) {
+    const ok = celBtn.dataset.celAns === celBtn.dataset.correct;
+    bindFeedback(celBtn, 'fb-cel', ok, t('fb_ok'), t('fb_wrong', { x: noteDisplayName(celBtn.dataset.correct) }), 'cel', celBtn.dataset.correct);
+    return;
+  }
   const lectBtn = e.target.closest('[data-lect-ans]');
   if (lectBtn && !lectBtn.disabled) {
     const ok = lectBtn.dataset.lectAns === lectBtn.dataset.correct;

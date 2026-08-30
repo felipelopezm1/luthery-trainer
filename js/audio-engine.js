@@ -7,7 +7,8 @@ const TrainerAudio = (() => {
     { id: 'brass', label: 'Metal', sf: 'trumpet' },
     { id: 'strings', label: 'Cuerdas', sf: 'violin' },
     { id: 'guitar', label: 'Guitarra', sf: 'acoustic_guitar_nylon' },
-    { id: 'organ', label: 'Acordes', sf: 'church_organ' }
+    { id: 'organ', label: 'Acordes', sf: 'church_organ' },
+    { id: 'cello', label: 'Cello', sf: 'cello' }
   ];
 
   const NOTE_NAMES = ['Do','Do♯','Re','Re♯','Mi','Fa','Fa♯','Sol','Sol♯','La','La♯','Si'];

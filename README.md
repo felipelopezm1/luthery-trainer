@@ -16,6 +16,7 @@ Web app for **Prueba Sustitutoria de Música** (4º EE, Conservatorio Bilbao). C
 - Progress history with section and difficulty breakdown
 - **Upstash Redis** cloud sync with **email login** (signup/login at `login.html`)
 - **Playground** lab for MIDI recording and layered tracks
+- **Cello room** (separate from the exam): Vivaldi RV 40 Largo example, follow-along, mic check, YouTube references
 
 ---
 
@@ -96,6 +97,10 @@ js/auth.js          Session client (login, logout)
 js/audio-engine.js  Soundfonts, viz, MIDI, comparison
 js/sync.js          Upstash sync client
 js/playground.js    MIDI playground lab
+js/cello.js         Cello studio + bass-clef drills
+js/pitch-detect.js  Mic pitch (pitchy / autocorrelation)
+js/score-follow.js  MusicXML/MIDI parse + cursor
+js/cello-sfz.js     Cello timbre (soundfont; SFZ hook)
 js/nothing-ui.js    Theme / UI helpers
 css/                Nothing UI + app styles
 api/progress.js     GET/PUT/DELETE user progress
@@ -103,6 +108,19 @@ api/auth/           signup, login, me, logout
 fonts/open/         Doto, Geist, Newsreader
 .md/                Internal BELE documentation (not deployed)
 ```
+
+---
+
+## Cello room
+
+Standalone practice space (not part of the exam sequence). Open the cello icon in the rail.
+
+- Bundled example: **Vivaldi, Sonata in E minor RV 40, Largo** — simplified public-domain excerpt (`scores/vivaldi-rv40-largo.xml`)
+- **Seguir / Follow** moves the cursor with the metronome; **Micrófono** checks pitch (C2–A4)
+- Upload your own MusicXML / MIDI
+- YouTube search (or paste a link) to keep video references beside the score
+
+Tone: MusyngKite cello soundfont. Reference SFZ: [Karoryfer × bigcat cello](https://github.com/sfzinstruments/karoryfer-bigcat.cello) (not bundled).
 
 ---
 

@@ -17,7 +17,7 @@ const I18N = {
     run_items: 'Respuestas de esta serie',
     metro: 'Metrónomo', bpm: 'BPM', metro_bpm_aria: 'Pulsos por minuto',
     theme_dark: 'DARK', theme_light: 'LIGHT',
-    sc_lect: 'Lect.', sc_ac: 'Ac.', sc_rt: 'Rit.', sc_err: 'Err.', sc_teo: 'Teo.',
+    sc_lect: 'Lect.', sc_ac: 'Ac.', sc_rt: 'Rit.', sc_err: 'Err.', sc_teo: 'Teo.', sc_cel: 'Cel.',
     sec_rt: 'Ritmo', sec_err: 'Errores', sec_ac: 'Acordes', sec_lect: 'Lectura', sec_teo: 'Teoría',
     rt_hint: 'El compás no se muestra — identifícalo escuchando el patrón.',
     rt_title: '¿Qué compás es?', rt_listen: 'Escuchar patrón', rt_fast: 'Pulso rápido', rt_aural: 'Escucha',
@@ -142,6 +142,31 @@ const I18N = {
     auth_guest: 'Continuar sin cuenta', auth_guest_mode: 'Invitado', auth_guest_note: 'Modo invitado · el progreso se guarda en este dispositivo.',
     auth_guest_prompt: 'Inicia sesión para sincronizar tu progreso entre dispositivos.',
     auth_or: 'o', auth_lead_guest: 'Inicia sesión para la nube, o entra sin cuenta.',
+    nav_cello: 'Cello', sec_cel: 'Cello', seq_cel: 'Cello',
+    cello_kicker: 'Sala de cello',
+    cello_piece: 'Vivaldi · Sonata RV 40 · Largo',
+    cello_piece_sub: 'Ejemplo de dominio público. Pulsa Seguir, o busca un vídeo de referencia.',
+    cello_upload: 'Tu partitura',
+    cello_play: 'Seguir', cello_stop: 'Parar', cello_listen: 'Micrófono',
+    cello_ready: 'Cargando el Largo…',
+    cello_example_ready: 'Ejemplo listo · 50 BPM',
+    cello_example_err: 'No se pudo cargar el ejemplo. Sube un MusicXML o MIDI.',
+    cello_loaded: '{n} notas cargadas', cello_load_err: 'No se pudo leer el archivo.',
+    cello_done: 'Fin de la partitura', cello_hit: 'Afinado', cello_miss: 'Ajusta',
+    cello_mic_denied: 'Micrófono bloqueado — permite el acceso en el navegador.',
+    cello_pane: 'Cello',
+    instr_cello: 'Cello',
+    cello_yt_label: 'Vídeos de referencia',
+    cello_yt_ph: 'Buscar en YouTube',
+    cello_yt_go: 'Buscar',
+    cello_yt_add: 'Añadir',
+    cello_yt_paste: 'O pega un enlace de YouTube',
+    cello_yt_searching: 'Buscando…',
+    cello_yt_fail: 'Pega el enlace aquí, o',
+    cello_yt_open: 'abrir en YouTube',
+    cello_yt_empty: 'Pulsa un resultado, o pega un enlace.',
+    cello_yt_saved: 'Guardados',
+    cello_yt_none: 'Aún no hay vídeos guardados.',
   },
   en: {
     brand: 'BELE TRAINER',
@@ -160,7 +185,7 @@ const I18N = {
     run_items: 'Answers in this run',
     metro: 'Metronome', bpm: 'BPM', metro_bpm_aria: 'Beats per minute',
     theme_dark: 'DARK', theme_light: 'LIGHT',
-    sc_lect: 'Read.', sc_ac: 'Ch.', sc_rt: 'Rhy.', sc_err: 'Err.', sc_teo: 'Th.',
+    sc_lect: 'Read.', sc_ac: 'Ch.', sc_rt: 'Rhy.', sc_err: 'Err.', sc_teo: 'Th.', sc_cel: 'Cel.',
     sec_rt: 'Rhythm', sec_err: 'Errors', sec_ac: 'Chords', sec_lect: 'Reading', sec_teo: 'Theory',
     rt_hint: 'Time signature hidden — identify it by listening.',
     rt_title: 'What time signature?', rt_listen: 'Listen pattern', rt_fast: 'Fast pulse', rt_aural: 'Listen',
@@ -285,6 +310,31 @@ const I18N = {
     auth_guest: 'Continue without account', auth_guest_mode: 'Guest', auth_guest_note: 'Guest mode · progress stays on this device.',
     auth_guest_prompt: 'Sign in to sync progress across devices.',
     auth_or: 'or', auth_lead_guest: 'Sign in for cloud sync, or continue without an account.',
+    nav_cello: 'Cello', sec_cel: 'Cello', seq_cel: 'Cello',
+    cello_kicker: 'Cello room',
+    cello_piece: 'Vivaldi · Sonata RV 40 · Largo',
+    cello_piece_sub: 'Public-domain example. Press Follow, or search a reference video.',
+    cello_upload: 'Your score',
+    cello_play: 'Follow', cello_stop: 'Stop', cello_listen: 'Mic',
+    cello_ready: 'Loading the Largo…',
+    cello_example_ready: 'Example ready · 50 BPM',
+    cello_example_err: 'Could not load the example. Upload MusicXML or MIDI.',
+    cello_loaded: '{n} notes loaded', cello_load_err: 'Could not read that file.',
+    cello_done: 'End of score', cello_hit: 'In tune', cello_miss: 'Adjust',
+    cello_mic_denied: 'Microphone blocked — allow access in the browser.',
+    cello_pane: 'Cello',
+    instr_cello: 'Cello',
+    cello_yt_label: 'Reference videos',
+    cello_yt_ph: 'Search YouTube',
+    cello_yt_go: 'Search',
+    cello_yt_add: 'Add',
+    cello_yt_paste: 'Or paste a YouTube link',
+    cello_yt_searching: 'Searching…',
+    cello_yt_fail: 'Paste the link here, or',
+    cello_yt_open: 'open on YouTube',
+    cello_yt_empty: 'Pick a result, or paste a link.',
+    cello_yt_saved: 'Saved',
+    cello_yt_none: 'No videos saved yet.',
   },
 };
 
@@ -370,7 +420,7 @@ function localeDate(ts) {
 }
 
 function instrLabel(id) {
-  const map = { piano: 'instr_piano', wind: 'instr_wind', brass: 'instr_brass', strings: 'instr_strings', guitar: 'instr_guitar', organ: 'instr_organ' };
+  const map = { piano: 'instr_piano', wind: 'instr_wind', brass: 'instr_brass', strings: 'instr_strings', guitar: 'instr_guitar', organ: 'instr_organ', cello: 'instr_cello' };
   return t(map[id] || 'instr_piano');
 }
 
@@ -383,6 +433,7 @@ function setLang(l) {
   if (window.StatsViz) window.StatsViz.refresh();
   if (window.TrainerAudio?.onLangChange) window.TrainerAudio.onLangChange();
   if (window.Playground?.onLangChange) window.Playground.onLangChange();
+  if (window.Cello?.onLangChange) window.Cello.onLangChange();
   if (window.updSyncMeta) window.updSyncMeta();
 }
 
@@ -431,7 +482,7 @@ function applyChromeI18n() {
   const navMap = {
     inicio: 'nav_inicio', ritmo: 'nav_ritmo', errores: 'nav_errores',
     acordes: 'nav_acordes', lectura: 'nav_lectura', teoria: 'nav_teoria', historial: 'nav_historial',
-    playground: 'nav_playground',
+    playground: 'nav_playground', cello: 'nav_cello',
   };
   document.querySelectorAll('#main-nav .r-i').forEach(b => {
     const k = navMap[b.dataset.mod];
@@ -444,7 +495,7 @@ function applyChromeI18n() {
 }
 
 function updScoreLabels() {
-  const map = { 'sc-lect': 'sc_lect', 'sc-ac': 'sc_ac', 'sc-rt': 'sc_rt', 'sc-err': 'sc_err', 'sc-teo': 'sc_teo' };
+  const map = { 'sc-lect': 'sc_lect', 'sc-ac': 'sc_ac', 'sc-rt': 'sc_rt', 'sc-err': 'sc_err', 'sc-teo': 'sc_teo', 'sc-cel': 'sc_cel' };
   document.querySelectorAll('.score-pill').forEach(pill => {
     const b = pill.querySelector('b');
     if (!b) return;

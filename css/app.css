@@ -1377,10 +1377,20 @@ body.focus-open {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
-.appscreen.trainer .rail .r-i.r-i--playground.on {
+.appscreen.trainer .rail .r-i.r-i--playground.on,
+.appscreen.trainer .rail .r-i.r-i--cello.on {
   background: var(--accent);
   color: var(--accent-ink);
   box-shadow: none;
+}
+
+.appscreen.trainer .rail .r-i.r-i--cello {
+  color: var(--accent-text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.appscreen.trainer .rail .r-i.r-i--cello:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 /* ── Playground workspace ── */
@@ -1971,4 +1981,169 @@ select:focus-visible {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ── Cello room (standalone, hides exam chrome) ── */
+.app-shell.cello-mode .viz-panel,
+.app-shell.cello-mode .util-panel,
+.app-shell.cello-mode .pane-bar,
+.app-shell.cello-mode .score-strip {
+  display: none !important;
+}
+.app-shell.cello-mode .page-stage {
+  max-width: none;
+  padding: 16px 20px 40px;
+}
+.app-shell.cello-mode .stage-pane { flex: 1; }
+
+.cello-app { max-width: 1120px; margin: 0 auto; }
+.cello-kicker {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 4px;
+}
+.cello-title {
+  font-family: var(--f-display);
+  font-weight: 500;
+  font-size: clamp(22px, 4vw, 32px);
+  margin: 0 0 6px;
+  color: var(--display);
+}
+.cello-sub { margin: 0 0 16px; color: var(--secondary); font-size: 14px; max-width: 52ch; }
+.cello-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.cello-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  color: var(--display);
+}
+.cello-btn--play { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.cello-listen-btn.on {
+  border-color: var(--accent);
+  color: var(--accent-text);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.cello-upload-btn { cursor: pointer; }
+.cello-status { margin: 0 0 8px; font-size: 13px; color: var(--secondary); }
+.cello-tuner-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; max-width: 420px; }
+.cello-tuner-row b { font-family: var(--f-mono); font-size: 13px; min-width: 10ch; }
+.cello-cents {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--line-2);
+  position: relative;
+}
+.cello-cents i {
+  position: absolute;
+  top: -3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--display);
+  left: var(--cents, 50%);
+  transform: translateX(-50%);
+}
+.cello-cents.hit i { background: var(--success); }
+.cello-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+@media (min-width: 900px) {
+  .cello-layout { grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr); align-items: start; }
+}
+.cello-score {
+  min-height: 220px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 10px;
+  overflow: auto;
+  background: var(--surface);
+}
+.cello-empty { color: var(--muted); font-size: 12px; }
+.cello-yt {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 12px;
+  background: var(--surface);
+}
+.cello-yt-title, .cello-yt-saved-label {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+.cello-yt-form { display: flex; gap: 6px; margin-bottom: 8px; }
+.cello-yt-input {
+  flex: 1;
+  min-height: 40px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--display);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.cello-yt-form .cello-yt-input { margin-bottom: 0; }
+.cello-yt-status { font-size: 12px; color: var(--secondary); min-height: 1.2em; }
+.cello-yt-results { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; max-height: 220px; overflow: auto; }
+.cello-yt-hit {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  padding: 6px;
+  cursor: pointer;
+  color: var(--display);
+}
+.cello-yt-hit img { width: 96px; height: 54px; object-fit: cover; border-radius: 4px; flex-shrink: 0; }
+.cello-yt-hit span { font-size: 12px; line-height: 1.3; }
+.cello-yt-player {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--bg);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  margin: 8px 0;
+}
+.cello-yt-player iframe { width: 100%; height: 100%; border: 0; }
+.cello-yt-hint { margin: 12px; font-size: 12px; color: var(--muted); }
+.cello-yt-saved { display: flex; flex-wrap: wrap; gap: 6px; }
+.cello-yt-chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 11px;
+  background: var(--bg);
+  cursor: pointer;
+  color: var(--display);
+}
+
+@media (max-width: 520px) {
+  .cello-bar { flex-direction: column; }
+  .cello-btn, .cello-upload-btn { width: 100%; }
 }

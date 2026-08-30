@@ -7,12 +7,13 @@ const StatsViz = (() => {
     { id: 'rt', label: 'Ritmo' },
     { id: 'err', label: 'Errores' },
     { id: 'teo', label: 'Teoría' },
+    { id: 'cel', label: 'Cello' },
   ];
-  const MOD_SEC = { ritmo: 'rt', errores: 'err', acordes: 'ac', lectura: 'lect', teoria: 'teo' };
+  const MOD_SEC = { ritmo: 'rt', errores: 'err', acordes: 'ac', lectura: 'lect', teoria: 'teo', cello: 'cel' };
   const LEVELS = ['easy', 'medium', 'hard'];
   const MOD_LABEL = {
     inicio: 'General', historial: 'General', ritmo: 'Ritmo', errores: 'Errores',
-    acordes: 'Acordes', lectura: 'Lectura', teoria: 'Teoría',
+    acordes: 'Acordes', lectura: 'Lectura', teoria: 'Teoría', cello: 'Cello',
   };
   const DIFF = { easy: 'Fácil', medium: 'Medio', hard: 'Difícil' };
 
