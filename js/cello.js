@@ -4,6 +4,7 @@ const Cello = (() => {
   const YT_KEY = 'music_bele_cello_yt';
   const EXAMPLE = {
     url: 'scores/vivaldi-rv40-largo.xml',
+    pdf: 'scores/vivaldi-op14-cello-sonatas.pdf',
     bpm: 50,
     ytQuery: 'Vivaldi RV 40 cello sonata Largo',
   };
@@ -174,22 +175,36 @@ const Cello = (() => {
     window.open(href, '_blank', 'noopener');
   }
 
+  function setMetroExample() {
+    if (window.TrainerAudio?.setMetroBpm) window.TrainerAudio.setMetroBpm(EXAMPLE.bpm);
+    const bpm = document.getElementById('metro-bpm');
+    if (bpm) {
+      bpm.value = EXAMPLE.bpm;
+      const val = document.getElementById('metro-bpm-val');
+      if (val) val.textContent = String(EXAMPLE.bpm);
+    }
+  }
+
+  async function showPdf() {
+    const host = document.getElementById('cello-score');
+    if (!host || !window.ScorePdf?.hasPdf()) return;
+    host.classList.add('cello-score--pdf');
+    await window.ScorePdf.render(host);
+  }
+
   async function loadExample() {
     const st = document.getElementById('cello-status');
     try {
-      const res = await fetch(EXAMPLE.url);
-      if (!res.ok) throw new Error('fetch');
-      window.ScoreFollow.loadXml(await res.text());
-      await window.ScoreFollow.render(document.getElementById('cello-score'));
-      exampleLoaded = true;
-      if (window.TrainerAudio?.setMetroBpm) window.TrainerAudio.setMetroBpm(EXAMPLE.bpm);
-      const bpm = document.getElementById('metro-bpm');
-      if (bpm) {
-        bpm.value = EXAMPLE.bpm;
-        const val = document.getElementById('metro-bpm-val');
-        if (val) val.textContent = String(EXAMPLE.bpm);
+      if (window.ScorePdf) {
+        await window.ScorePdf.loadUrl(EXAMPLE.pdf);
+        await showPdf();
       }
-      if (st) st.textContent = t('cello_example_ready');
+      const res = await fetch(EXAMPLE.url);
+      if (res.ok && window.ScoreFollow) window.ScoreFollow.loadXml(await res.text());
+      exampleLoaded = true;
+      setMetroExample();
+      const pages = window.ScorePdf?.pageInfo()?.pages;
+      if (st) st.textContent = pages ? t('cello_pdf_ready', { n: pages }) : t('cello_example_ready');
     } catch {
       if (st) st.textContent = t('cello_example_err');
     }
@@ -208,7 +223,7 @@ const Cello = (() => {
         <button type="button" class="cello-btn" id="cello-stop">${t('cello_stop')}</button>
         <button type="button" class="cello-btn cello-listen-btn${on ? ' on' : ''}" id="cello-listen" aria-pressed="${on}">${t('cello_listen')}</button>
         <label class="cello-btn cello-upload-btn">
-          <input type="file" id="cello-upload" accept=".xml,.musicxml,.mxl,.mid,.midi" hidden>
+          <input type="file" id="cello-upload" accept=".pdf,.xml,.musicxml,.mxl,.mid,.midi" hidden>
           ${t('cello_upload')}
         </label>
       </div>
@@ -218,7 +233,14 @@ const Cello = (() => {
         <div class="cello-cents" id="cello-cents" aria-hidden="true"><i></i></div>
       </div>
       <div class="cello-layout">
-        <div class="cello-score" id="cello-score"></div>
+        <div class="cello-score-wrap">
+          <div class="cello-pdf-bar" id="cello-pdf-bar" hidden>
+            <button type="button" class="cello-btn" id="cello-pdf-prev" aria-label="${t('cello_pdf_prev')}">‹</button>
+            <span id="cello-pdf-info">—</span>
+            <button type="button" class="cello-btn" id="cello-pdf-next" aria-label="${t('cello_pdf_next')}">›</button>
+          </div>
+          <div class="cello-score" id="cello-score"></div>
+        </div>
         <aside class="cello-yt" aria-label="${t('cello_yt_label')}">
           <h2 class="cello-yt-title">${t('cello_yt_label')}</h2>
           <form class="cello-yt-form" id="cello-yt-form">
@@ -248,12 +270,22 @@ const Cello = (() => {
     document.addEventListener('change', async e => {
       if (e.target.id === 'cello-upload') {
         const file = e.target.files?.[0];
-        if (!file || !window.ScoreFollow) return;
+        if (!file) return;
         const st = document.getElementById('cello-status');
+        const name = (file.name || '').toLowerCase();
         try {
+          exampleLoaded = false;
+          if (name.endsWith('.pdf') && window.ScorePdf) {
+            const n = await window.ScorePdf.loadFile(file);
+            await showPdf();
+            if (st) st.textContent = t('cello_pdf_loaded', { n });
+            return;
+          }
+          if (!window.ScoreFollow) return;
+          window.ScorePdf?.destroy?.();
+          document.getElementById('cello-score')?.classList.remove('cello-score--pdf');
           await window.ScoreFollow.loadFile(file);
           await window.ScoreFollow.render(document.getElementById('cello-score'));
-          exampleLoaded = false;
           if (st) st.textContent = t('cello_loaded', { n: window.ScoreFollow.getNotes().length });
         } catch {
           if (st) st.textContent = t('cello_load_err');
@@ -261,6 +293,12 @@ const Cello = (() => {
         return;
       }
       if (e.target.id === 'cello-yt-paste') addPasted();
+    });
+    document.addEventListener('keydown', e => {
+      if (!document.querySelector('.cello-app') || !window.ScorePdf?.hasPdf()) return;
+      if (e.target.matches('input, textarea')) return;
+      if (e.key === 'ArrowLeft') { e.preventDefault(); window.ScorePdf.go(-1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); window.ScorePdf.go(1); }
     });
     document.addEventListener('submit', e => {
       if (e.target.id === 'cello-yt-form') {
@@ -280,6 +318,8 @@ const Cello = (() => {
       if (add) { addVideo(add.dataset.ytAdd, add.dataset.ytTitle); return; }
       const playVid = e.target.closest('[data-yt-play]');
       if (playVid) { setPlayer(playVid.dataset.ytPlay, playVid.textContent); return; }
+      if (e.target.closest('#cello-pdf-prev')) { window.ScorePdf?.go(-1); return; }
+      if (e.target.closest('#cello-pdf-next')) { window.ScorePdf?.go(1); return; }
       if (e.target.closest('#cello-listen')) { setListen(!listenOn()); return; }
       if (e.target.closest('#cello-play')) {
         const range = document.getElementById('metro-bpm');
@@ -317,8 +357,9 @@ const Cello = (() => {
       box.dataset.searched = '1';
       searchYoutube(q);
     }
-    const hasNotes = window.ScoreFollow?.getNotes?.()?.length;
-    if (hasNotes) {
+    if (window.ScorePdf?.hasPdf()) {
+      await showPdf();
+    } else if (window.ScoreFollow?.getNotes?.()?.length) {
       await window.ScoreFollow.render(document.getElementById('cello-score'));
     } else if (!exampleLoaded) {
       await loadExample();

@@ -115,9 +115,9 @@ fonts/open/         Doto, Geist, Newsreader
 
 Standalone practice space (not part of the exam sequence). Open the cello icon in the rail.
 
-- Bundled example: **Vivaldi, Sonata in E minor RV 40, Largo** — simplified public-domain excerpt (`scores/vivaldi-rv40-largo.xml`)
-- **Seguir / Follow** moves the cursor with the metronome; **Micrófono** checks pitch (C2–A4)
-- Upload your own MusicXML / MIDI
+- Bundled example: **Vivaldi, 6 Cello Sonatas** (1740 print, public domain PDF) plus a MusicXML Largo excerpt for follow-along
+- **Seguir / Follow** keeps the pulse; **Micrófono** checks pitch (C2–A4)
+- Upload your own **PDF**, MusicXML, or MIDI
 - YouTube search (or paste a link) to keep video references beside the score
 
 Tone: MusyngKite cello soundfont. Reference SFZ: [Karoryfer × bigcat cello](https://github.com/sfzinstruments/karoryfer-bigcat.cello) (not bundled).

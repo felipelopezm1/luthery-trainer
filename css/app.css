@@ -2065,6 +2065,21 @@ select:focus-visible {
 @media (min-width: 900px) {
   .cello-layout { grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr); align-items: start; }
 }
+.cello-score-wrap { min-width: 0; }
+.cello-pdf-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.cello-pdf-bar .cello-btn { min-height: 40px; min-width: 44px; padding: 6px 12px; }
+.cello-pdf-bar span {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  min-width: 7ch;
+  text-align: center;
+}
 .cello-score {
   min-height: 220px;
   border: 1px solid var(--line);
@@ -2073,6 +2088,8 @@ select:focus-visible {
   overflow: auto;
   background: var(--surface);
 }
+.cello-score--pdf { padding: 0; background: #f4f1ea; }
+.cello-pdf-canvas { display: block; width: 100%; height: auto; }
 .cello-empty { color: var(--muted); font-size: 12px; }
 .cello-yt {
   border: 1px solid var(--line);
