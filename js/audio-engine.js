@@ -29,9 +29,27 @@ const TrainerAudio = (() => {
     bpm: parseInt(localStorage.getItem(METRO_KEY), 10) || 72,
     running: false,
     beat: 0,
+    beats: 4,
+    beatType: 4,
+    clicks: 4,
     raf: null,
     next: 0,
   };
+
+  function metroClicks(beats, beatType) {
+    const b = Math.max(1, Math.min(12, Math.round(beats) || 4));
+    const t = beatType || 4;
+    if (t === 8 && b % 3 === 0) return Math.max(1, b / 3);
+    return b;
+  }
+
+  function metroInterval() {
+    const compound = metro.beatType === 8 && metro.beats % 3 === 0;
+    const clicks = metro.clicks || metroClicks(metro.beats, metro.beatType);
+    const quartersPerBar = metro.beats * (4 / (metro.beatType || 4));
+    const quartersPerClick = quartersPerBar / clicks;
+    return (60 / metro.bpm) * quartersPerClick;
+  }
 
   function midiToLabel(m) {
     return typeof window.midiLabel === 'function' ? window.midiLabel(m) : (() => {
@@ -334,12 +352,30 @@ const TrainerAudio = (() => {
     updateMetroLights();
   }
 
+  function rebuildMetroLights() {
+    const wrap = document.getElementById('metro-lights');
+    if (!wrap) return;
+    const n = metro.clicks || 4;
+    if (wrap.children.length === n) return;
+    wrap.innerHTML = Array.from({ length: n }, () => '<span></span>').join('');
+  }
+
+  function setMetroMeter(beats, beatType) {
+    metro.beats = Math.max(1, Math.min(12, Math.round(beats) || 4));
+    metro.beatType = beatType || 4;
+    metro.clicks = metroClicks(metro.beats, metro.beatType);
+    metro.beat = metro.beat % metro.clicks;
+    rebuildMetroLights();
+    updateMetroLights();
+  }
+
   function metroLoop() {
     if (!metro.running) return;
-    const iv = 60 / metro.bpm;
+    const iv = metroInterval();
+    const clicks = metro.clicks || 4;
     while (metro.next <= ac.currentTime + 0.06) {
       metroTick(metro.beat === 0);
-      metro.beat = (metro.beat + 1) % 4;
+      metro.beat = (metro.beat + 1) % clicks;
       metro.next += iv;
     }
     metro.raf = requestAnimationFrame(metroLoop);
@@ -570,6 +606,7 @@ const TrainerAudio = (() => {
     drawKeyboard,
     toggleMetro,
     setMetroBpm,
+    setMetroMeter,
     isMetroRunning: () => metro.running,
     onLangChange,
   };

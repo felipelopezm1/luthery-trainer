@@ -1996,7 +1996,9 @@ select:focus-visible {
 }
 .app-shell.cello-mode .stage-pane { flex: 1; }
 
-.cello-app { max-width: 1120px; margin: 0 auto; }
+.cello-app { max-width: 1280px; margin: 0 auto; }
+.cello-app--focus { max-width: none; }
+.cello-app--following .cello-sub { display: none; }
 .cello-kicker {
   font-family: var(--f-mono);
   font-size: 10px;
@@ -2013,7 +2015,29 @@ select:focus-visible {
   color: var(--display);
 }
 .cello-sub { margin: 0 0 16px; color: var(--secondary); font-size: 14px; max-width: 52ch; }
-.cello-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.cello-bar { display: none; }
+.cello-studio {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.cello-dock {
+  position: sticky;
+  top: 10px;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.cello-dock .cello-btn,
+.cello-dock .cello-upload-btn { width: 100%; }
+.cello-dock .cello-status { margin: 4px 0 0; }
+.cello-dock .cello-tuner-row { margin: 0; max-width: none; }
 .cello-btn {
   display: inline-flex;
   align-items: center;
@@ -2030,12 +2054,33 @@ select:focus-visible {
   color: var(--display);
 }
 .cello-btn--play { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.cello-btn--play[aria-pressed="true"] { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
 .cello-listen-btn.on {
   border-color: var(--accent);
   color: var(--accent-text);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .cello-upload-btn { cursor: pointer; }
+.cello-piece-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.cello-piece {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--display);
+  font-size: 13px;
+  padding: 6px 8px;
+}
 .cello-status { margin: 0 0 8px; font-size: 13px; color: var(--secondary); }
 .cello-tuner-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; max-width: 420px; }
 .cello-tuner-row b { font-family: var(--f-mono); font-size: 13px; min-width: 10ch; }
@@ -2057,21 +2102,28 @@ select:focus-visible {
   transform: translateX(-50%);
 }
 .cello-cents.hit i { background: var(--success); }
-.cello-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
+.cello-layout { display: contents; }
+@media (min-width: 720px) {
+  .cello-studio { grid-template-columns: 148px minmax(0, 1fr); }
+  .cello-app:not(.cello-app--focus) .cello-yt { grid-column: 2; }
 }
-@media (min-width: 900px) {
-  .cello-layout { grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr); align-items: start; }
+@media (min-width: 960px) {
+  .cello-app--focus .cello-studio {
+    grid-template-columns: 148px minmax(0, 1fr) minmax(280px, 0.9fr);
+  }
+  .cello-app--focus .cello-yt {
+    position: sticky;
+    top: 10px;
+    align-self: start;
+  }
 }
 .cello-score-wrap { min-width: 0; }
 .cello-pdf-bar {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin: 4px 0 0;
 }
 .cello-pdf-bar .cello-btn { min-height: 40px; min-width: 44px; padding: 6px 12px; }
 .cello-pdf-bar span {
@@ -2089,6 +2141,19 @@ select:focus-visible {
   background: var(--surface);
 }
 .cello-score--pdf { padding: 0; background: #f4f1ea; }
+.cello-score--follow {
+  background: #fbfaf6;
+  min-height: 280px;
+  overflow: auto;
+}
+.cello-score--follow svg { max-width: 100%; }
+.cello-score .cello-cursor,
+.cello-score [id^="cursorImg"],
+.cello-score img.cursor {
+  outline: 2px solid var(--accent);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 28%, transparent);
+  border-radius: 3px;
+}
 .cello-pdf-canvas { display: block; width: 100%; height: auto; }
 .cello-empty { color: var(--muted); font-size: 12px; }
 .cello-yt {
@@ -2097,6 +2162,19 @@ select:focus-visible {
   padding: 12px;
   background: var(--surface);
 }
+.cello-yt-now { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.cello-yt-now-title {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--display);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cello-app--focus .cello-yt-browse { display: none; }
+.cello-app--focus .cello-yt-empty { display: none; }
 .cello-yt-title, .cello-yt-saved-label {
   font-family: var(--f-mono);
   font-size: 10px;
@@ -2160,7 +2238,24 @@ select:focus-visible {
   color: var(--display);
 }
 
-@media (max-width: 520px) {
-  .cello-bar { flex-direction: column; }
-  .cello-btn, .cello-upload-btn { width: 100%; }
+@media (max-width: 719px) {
+  .cello-dock {
+    top: 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .cello-dock .cello-btn,
+  .cello-dock .cello-upload-btn { width: auto; flex: 1 1 30%; }
+  .cello-dock .cello-status,
+  .cello-dock .cello-tuner-row { flex: 1 1 100%; }
+  .cello-app--focus .cello-yt {
+    position: sticky;
+    top: 0;
+    z-index: 7;
+    order: -1;
+  }
+  .cello-studio { display: flex; flex-direction: column; }
+  .cello-dock { order: 0; }
+  .cello-score-wrap { order: 2; }
+  .cello-app--focus .cello-yt { order: 1; }
 }

@@ -1,6 +1,8 @@
-/* ScoreFollow — MusicXML/MIDI load, OSMD cursor, metronome-synced target */
+/* ScoreFollow — MusicXML/MIDI load, OSMD cursor, score-tempo playback */
 const ScoreFollow = (() => {
   let notes = [];
+  let playNotes = [];
+  let meta = defaultMeta();
   let osmd = null;
   let host = null;
   let playing = false;
@@ -16,6 +18,12 @@ const ScoreFollow = (() => {
   let lastBpm = 72;
   let lastXml = null;
 
+  const DYN_NAME = { ppp: 0.16, pp: 0.22, p: 0.32, mp: 0.4, mf: 0.5, f: 0.62, ff: 0.75, fff: 0.88 };
+
+  function defaultMeta() {
+    return { bpm: 72, beats: 4, beatType: 4, title: '', tempoMap: [{ q: 0, bpm: 72 }] };
+  }
+
   function OSMD() {
     return window.opensheetmusicdisplay || window.OpenSheetMusicDisplay;
   }
@@ -25,31 +33,224 @@ const ScoreFollow = (() => {
     return (parseInt(octave, 10) + 1) * 12 + base + (parseInt(alter || '0', 10) || 0);
   }
 
+  function tag(el) {
+    return (el.localName || el.tagName || '').replace(/^.*:/, '').toLowerCase();
+  }
+
+  function text(el, sel) {
+    return el.querySelector(sel)?.textContent?.trim() || '';
+  }
+
+  function num(el, sel, fallback = 0) {
+    const n = parseFloat(text(el, sel));
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function dynGainFromName(name) {
+    return DYN_NAME[name] ?? null;
+  }
+
+  function dynGainFromSound(n) {
+    if (!Number.isFinite(n)) return null;
+    return Math.max(0.12, Math.min(0.9, (n / 100) * 0.8));
+  }
+
+  function readTempo(el) {
+    if (!el) return null;
+    const sounds = tag(el) === 'sound' ? [el] : [...el.querySelectorAll('sound')];
+    for (const s of sounds) {
+      const v = parseFloat(s.getAttribute('tempo'));
+      if (Number.isFinite(v) && v > 0) return v;
+    }
+    const pm = el.querySelector('metronome per-minute, per-minute');
+    const v = parseFloat(pm?.textContent);
+    return Number.isFinite(v) && v > 0 ? v : null;
+  }
+
+  function readDynamics(el) {
+    if (!el) return null;
+    const sounds = tag(el) === 'sound' ? [el] : [...el.querySelectorAll('sound')];
+    for (const s of sounds) {
+      const g = dynGainFromSound(parseFloat(s.getAttribute('dynamics')));
+      if (g != null) return g;
+    }
+    const dyn = el.querySelector('dynamics');
+    if (!dyn) return null;
+    for (const child of dyn.children) {
+      const g = dynGainFromName(tag(child));
+      if (g != null) return g;
+    }
+    return null;
+  }
+
+  function pushTempo(map, q, bpm) {
+    if (!Number.isFinite(bpm) || bpm <= 0) return;
+    const last = map[map.length - 1];
+    if (last && Math.abs(last.q - q) < 1e-6) last.bpm = bpm;
+    else if (!last || last.bpm !== bpm) map.push({ q, bpm });
+  }
+
+  function expandRepeats(measures) {
+    const out = [];
+    let start = 0;
+    const seen = new Map();
+    let i = 0;
+    while (i < measures.length) {
+      out.push(measures[i]);
+      if (measures[i].repeatForward) start = i;
+      if (measures[i].repeatBackward) {
+        const times = measures[i].repeatTimes || 2;
+        const n = (seen.get(i) || 0) + 1;
+        seen.set(i, n);
+        if (n < times) {
+          i = start;
+          continue;
+        }
+      }
+      i++;
+    }
+    return out;
+  }
+
+  function parseMeasureMeta(measure) {
+    const info = { repeatForward: false, repeatBackward: false, repeatTimes: 2 };
+    measure.querySelectorAll('repeat').forEach(r => {
+      const dir = (r.getAttribute('direction') || '').toLowerCase();
+      if (dir === 'forward') info.repeatForward = true;
+      if (dir === 'backward') {
+        info.repeatBackward = true;
+        const times = parseInt(r.getAttribute('times'), 10);
+        if (times > 1) info.repeatTimes = times;
+      }
+    });
+    return info;
+  }
+
   function parseMusicXmlText(xml) {
     const doc = new DOMParser().parseFromString(xml, 'text/xml');
-    const divisions = parseFloat(doc.querySelector('attributes divisions')?.textContent || '1') || 1;
-    const bpmEl = doc.querySelector('sound[tempo], metronome per-minute');
-    const bpm = parseFloat(bpmEl?.getAttribute?.('tempo') || bpmEl?.textContent || '72') || 72;
-    const beat = 60 / bpm;
+    const part = doc.querySelector('part') || doc.documentElement;
+    const measureEls = [...part.querySelectorAll(':scope > measure')];
+    const raw = (measureEls.length ? measureEls : [...doc.querySelectorAll('measure')]).map(el => ({
+      el,
+      ...parseMeasureMeta(el),
+    }));
+    const measures = expandRepeats(raw);
+
+    let divisions = 1;
+    let beats = 4;
+    let beatType = 4;
+    let bpm = 72;
+    let gain = 0.45;
+    let q = 0;
+    const tempoMap = [];
     const out = [];
-    let t = 0;
-    doc.querySelectorAll('measure').forEach(measure => {
-      measure.querySelectorAll('note').forEach(note => {
-        const durDiv = parseFloat(note.querySelector('duration')?.textContent || '0') || 0;
-        const sec = (durDiv / divisions) * beat;
-        if (note.querySelector('rest')) { t += sec; return; }
-        const pitch = note.querySelector('pitch');
-        if (!pitch) { t += sec; return; }
-        const midi = midiFromXmlPitch(
-          pitch.querySelector('step')?.textContent || 'C',
-          pitch.querySelector('alter')?.textContent,
-          pitch.querySelector('octave')?.textContent || '3'
-        );
-        out.push({ midi, startSec: t, durSec: Math.max(0.12, sec) });
-        if (!note.querySelector('chord')) t += sec;
-      });
+    const openTies = new Map();
+    let firstBpm = 0;
+
+    const title = text(doc, 'work-title') || text(doc, 'movement-title') || '';
+
+    measures.forEach((wrap, mi) => {
+      const measure = wrap.el;
+      const bar = parseInt(measure.getAttribute('number'), 10) || (mi + 1);
+      let cursor = q;
+      let lastNote = null;
+
+      for (const el of measure.children) {
+        const name = tag(el);
+        if (name === 'attributes') {
+          const d = num(el, 'divisions');
+          if (d > 0) divisions = d;
+          const b = parseInt(text(el, 'time beats'), 10);
+          const bt = parseInt(text(el, 'time beat-type'), 10);
+          if (b > 0) beats = b;
+          if (bt > 0) beatType = bt;
+        }
+        if (name === 'direction' || name === 'sound') {
+          const tempo = readTempo(el);
+          if (tempo) {
+            if (!firstBpm) firstBpm = tempo;
+            bpm = tempo;
+            pushTempo(tempoMap, cursor, tempo);
+          }
+          const dyn = readDynamics(el);
+          if (dyn != null) gain = dyn;
+        }
+        if (name === 'backup') {
+          cursor -= num(el, 'duration') / divisions;
+          continue;
+        }
+        if (name === 'forward') {
+          cursor += num(el, 'duration') / divisions;
+          continue;
+        }
+        if (name !== 'note') continue;
+
+        const isChord = !!el.querySelector('chord');
+        const isGrace = !!el.querySelector('grace');
+        const isRest = !!el.querySelector('rest');
+        const durQ = isGrace ? 0 : (num(el, 'duration') / divisions);
+        const startQ = isChord && lastNote ? lastNote.startQ : cursor;
+
+        const tempoOnNote = readTempo(el);
+        if (tempoOnNote) {
+          if (!firstBpm) firstBpm = tempoOnNote;
+          bpm = tempoOnNote;
+          pushTempo(tempoMap, startQ, tempoOnNote);
+        }
+        const dynOnNote = readDynamics(el);
+        if (dynOnNote != null) gain = dynOnNote;
+
+        if (!isRest) {
+          const pitch = el.querySelector('pitch');
+          if (pitch) {
+            const midi = midiFromXmlPitch(
+              text(pitch, 'step') || 'C',
+              text(pitch, 'alter'),
+              text(pitch, 'octave') || '3'
+            );
+            const staccato = !!el.querySelector('staccato');
+            const accent = !!(el.querySelector('accent') || el.querySelector('strong-accent'));
+            const fermata = !!el.querySelector('fermata');
+            const tieStart = !![...el.querySelectorAll('tie, tied')].find(n => (n.getAttribute('type') || '') === 'start');
+            const tieStop = !![...el.querySelectorAll('tie, tied')].find(n => (n.getAttribute('type') || '') === 'stop');
+
+            if (tieStop && openTies.has(midi)) {
+              const prev = openTies.get(midi);
+              prev.durQ += durQ;
+              if (fermata) prev.fermata = true;
+              if (!tieStart) openTies.delete(midi);
+              lastNote = prev;
+            } else {
+              const note = {
+                midi,
+                startQ,
+                durQ: Math.max(isGrace ? 0.08 : 0, durQ),
+                measure: bar,
+                gain,
+                staccato,
+                accent,
+                fermata,
+              };
+              out.push(note);
+              lastNote = note;
+              if (tieStart) openTies.set(midi, note);
+            }
+          }
+        }
+
+        if (!isChord && !isGrace) cursor += durQ;
+      }
+
+      const written = beats * (4 / beatType);
+      q = Math.max(cursor, q + written);
     });
-    return out;
+
+    if (!firstBpm) firstBpm = bpm;
+    if (!tempoMap.length) pushTempo(tempoMap, 0, firstBpm);
+    if (tempoMap[0].q > 0) tempoMap.unshift({ q: 0, bpm: firstBpm });
+
+    meta = { bpm: firstBpm, beats, beatType, title, tempoMap };
+    return out.sort((a, b) => a.startQ - b.startQ || a.midi - b.midi);
   }
 
   function readVarLen(view, i) {
@@ -63,9 +264,12 @@ const ScoreFollow = (() => {
     if (view.getUint32(0) !== 0x4d546864) throw new Error('parse failed');
     const ntrks = view.getUint16(10);
     let off = 14;
-    let tempo = 500000;
+    let tempoUs = 500000;
     const ppq = view.getUint16(12) || 480;
     const events = [];
+    const tempoMap = [];
+    let beats = 4;
+    let beatType = 4;
     for (let tr = 0; tr < ntrks; tr++) {
       if (off + 8 > view.byteLength) break;
       if (view.getUint32(off) !== 0x4d54726b) break;
@@ -88,7 +292,11 @@ const ScoreFollow = (() => {
           const type = view.getUint8(i.n++);
           const l = readVarLen(view, i);
           if (type === 0x51 && l === 3) {
-            tempo = (view.getUint8(i.n) << 16) | (view.getUint8(i.n + 1) << 8) | view.getUint8(i.n + 2);
+            tempoUs = (view.getUint8(i.n) << 16) | (view.getUint8(i.n + 1) << 8) | view.getUint8(i.n + 2);
+            pushTempo(tempoMap, tick / ppq, 60000000 / tempoUs);
+          } else if (type === 0x58 && l >= 2) {
+            beats = view.getUint8(i.n) || 4;
+            beatType = 2 ** view.getUint8(i.n + 1) || 4;
           }
           i.n += l;
         } else if (st === 0xf0 || st === 0xf7) {
@@ -97,63 +305,66 @@ const ScoreFollow = (() => {
       }
       off = end;
     }
-    const secPerTick = (tempo / 1e6) / ppq;
     const starts = new Map();
     const out = [];
     events.sort((a, b) => a.tick - b.tick);
     events.forEach(ev => {
-      const t = ev.tick * secPerTick;
-      if (ev.on) starts.set(ev.midi, t);
+      const startQ = ev.tick / ppq;
+      if (ev.on) starts.set(ev.midi, startQ);
       else if (starts.has(ev.midi)) {
         const s = starts.get(ev.midi);
-        out.push({ midi: ev.midi, startSec: s, durSec: Math.max(0.12, t - s) });
+        out.push({ midi: ev.midi, startQ: s, durQ: Math.max(0.05, startQ - s), measure: Math.floor(s / beats) + 1, gain: 0.45 });
         starts.delete(ev.midi);
       }
     });
-    return out.sort((a, b) => a.startSec - b.startSec);
+    const firstBpm = tempoMap[0]?.bpm || 120;
+    if (!tempoMap.length) pushTempo(tempoMap, 0, firstBpm);
+    if (tempoMap[0].q > 0) tempoMap.unshift({ q: 0, bpm: firstBpm });
+    meta = { bpm: Math.round(firstBpm), beats, beatType, title: '', tempoMap };
+    return out.sort((a, b) => a.startQ - b.startQ);
   }
 
-  function extractOsmdNotes() {
-    if (!osmd?.cursor) return notes;
-    try {
-      const iter = osmd.cursor.Iterator;
-      osmd.cursor.reset();
-      const out = [];
-      const bpm = lastBpm || 72;
-      while (!osmd.cursor.Iterator.endReached) {
-        const voices = osmd.cursor.Iterator.CurrentVoiceEntries || [];
-        const stamp = osmd.cursor.Iterator.currentTimeStamp?.realValue ?? 0;
-        voices.forEach(v => {
-          (v.Notes || v.notes || []).forEach(note => {
-            if (!note || note.isRest?.()) return;
-            const ht = note.halfTone ?? note.halftone;
-            if (ht == null) return;
-            out.push({
-              midi: ht + 12,
-              startSec: stamp * 4 * (60 / bpm),
-              durSec: 0.4,
-            });
-          });
-        });
-        osmd.cursor.next();
-      }
-      osmd.cursor.reset();
-      if (out.length) notes = out;
-    } catch (e) {
-      console.warn('[ScoreFollow] OSMD extract', e);
+  function secAt(q, playBpm, written) {
+    const scale = (written.bpm || 72) ? playBpm / written.bpm : 1;
+    const map = written.tempoMap?.length ? written.tempoMap : [{ q: 0, bpm: written.bpm || 72 }];
+    let t = 0;
+    for (let i = 0; i < map.length; i++) {
+      const a = map[i];
+      const next = map[i + 1];
+      const end = next ? Math.min(q, next.q) : q;
+      if (end <= a.q) break;
+      const local = (a.bpm || written.bpm) * scale;
+      t += (end - a.q) * (60 / local);
+      if (!next || q <= next.q) break;
     }
-    return notes;
+    return t;
+  }
+
+  function materialize(src, playBpm) {
+    const written = meta;
+    return src.map(n => {
+      const startSec = secAt(n.startQ, playBpm, written);
+      let durSec = Math.max(0.12, secAt(n.startQ + (n.durQ || 0), playBpm, written) - startSec);
+      if (n.staccato) durSec *= 0.45;
+      if (n.fermata) durSec *= 1.5;
+      let gain = n.gain != null ? n.gain : 0.45;
+      if (n.accent) gain = Math.min(0.9, gain * 1.35);
+      return { ...n, startSec, durSec, gain };
+    });
   }
 
   async function loadFile(file) {
     const name = (file.name || '').toLowerCase();
     notes = [];
+    playNotes = [];
     lastXml = null;
     osmd = null;
+    meta = defaultMeta();
     if (name.endsWith('.mid') || name.endsWith('.midi')) {
       const buf = await file.arrayBuffer();
       notes = parseMidi(buf);
       if (!notes.length) throw new Error('parse failed');
+      playNotes = materialize(notes, meta.bpm);
       return notes;
     }
     let xml = '';
@@ -171,9 +382,42 @@ const ScoreFollow = (() => {
   function loadXml(xml) {
     lastXml = xml;
     osmd = null;
+    meta = defaultMeta();
     notes = parseMusicXmlText(xml);
     if (!notes.length) throw new Error('parse failed');
+    playNotes = materialize(notes, meta.bpm);
     return notes;
+  }
+
+  function seekCursor(startQ) {
+    if (!osmd?.cursor) return;
+    const target = (startQ || 0) / 4;
+    try {
+      const it = osmd.cursor.Iterator;
+      let stamp = it?.currentTimeStamp?.realValue;
+      if (stamp == null || stamp > target + 1e-3 || it.endReached) {
+        osmd.cursor.reset();
+        stamp = osmd.cursor.Iterator?.currentTimeStamp?.realValue ?? 0;
+      }
+      let guard = 0;
+      while (!osmd.cursor.Iterator.endReached && guard++ < 800) {
+        stamp = osmd.cursor.Iterator.currentTimeStamp?.realValue ?? 0;
+        if (stamp + 1e-3 >= target) break;
+        osmd.cursor.next();
+      }
+      osmd.cursor.show();
+      osmd.cursor.update?.();
+    } catch (e) {
+      console.warn('[ScoreFollow] cursor', e);
+    }
+    boostHighlight();
+  }
+
+  function boostHighlight() {
+    if (!host) return;
+    host.querySelectorAll('[id^="cursorImg"], .osmd-cursor, img.cursor, .cursor').forEach(el => {
+      el.classList.add('cello-cursor');
+    });
   }
 
   async function renderOsmd(el) {
@@ -181,10 +425,17 @@ const ScoreFollow = (() => {
     if (!ns || !lastXml) return false;
     const Ctor = ns.OpenSheetMusicDisplay || ns;
     el.innerHTML = '';
-    osmd = new Ctor(el, { autoResize: true, drawTitle: true, followCursor: true });
+    osmd = new Ctor(el, {
+      autoResize: true,
+      drawTitle: false,
+      followCursor: true,
+      drawingParameters: 'compact',
+      cursorsOptions: [{ type: 0, color: '#D71921', alpha: 0.42, follow: true }],
+      cursorOptions: [{ type: 0, color: '#D71921', alpha: 0.42, follow: true }],
+    });
     await osmd.load(lastXml);
     await osmd.render();
-    extractOsmdNotes();
+    try { osmd.cursor?.hide?.(); } catch {}
     return true;
   }
 
@@ -208,7 +459,9 @@ const ScoreFollow = (() => {
     const r = new Renderer(el, Renderer.Backends.SVG);
     r.resize(w, 120);
     const ctx = r.getContext();
-    const stave = new Stave(8, 10, w - 16).addClef('bass').addTimeSignature('4/4');
+    const stave = new Stave(8, 10, w - 16)
+      .addClef('bass')
+      .addTimeSignature(`${meta.beats}/${meta.beatType}`);
     stave.setContext(ctx).draw();
     const slice = notes.slice(0, 16);
     const Acc = typeof Accidental !== 'undefined' ? Accidental : (Vex?.Flow?.Accidental);
@@ -220,7 +473,7 @@ const ScoreFollow = (() => {
       if (step.includes('#') && Acc) vn.addModifier(new Acc(step.slice(1)));
       return vn;
     });
-    const voice = new Voice({ num_beats: 4, beat_value: 4 }).setStrict(false);
+    const voice = new Voice({ num_beats: meta.beats, beat_value: meta.beatType }).setStrict(false);
     voice.addTickables(vexNotes);
     try { new Formatter().joinVoices([voice]).format([voice], w - 70); voice.draw(ctx, stave); } catch {}
   }
@@ -234,17 +487,22 @@ const ScoreFollow = (() => {
   function loop() {
     if (!playing || paused) return;
     const now = elapsed();
-    while (cursorIdx < notes.length && notes[cursorIdx].startSec <= now) {
-      const n = notes[cursorIdx];
+    while (cursorIdx < playNotes.length && playNotes[cursorIdx].startSec <= now) {
+      const n = playNotes[cursorIdx];
       currentTarget = n.midi;
       if (onTarget) onTarget(n.midi);
       if (window.PitchDetect) window.PitchDetect.setTarget(n.midi);
-      window.CelloEngine?.play(n.midi, Math.min(n.durSec, 0.9), 0, 0.45);
-      try { if (cursorIdx > 0) osmd?.cursor?.next?.(); } catch {}
+      window.CelloEngine?.play(n.midi, Math.min(Math.max(n.durSec, 0.12), 4), 0, n.gain ?? 0.45);
+      seekCursor(n.startQ);
       if (onCursor) onCursor(cursorIdx, n);
       cursorIdx++;
     }
-    if (cursorIdx >= notes.length) {
+    if (cursorIdx >= playNotes.length) {
+      const last = playNotes[playNotes.length - 1];
+      if (last && now < last.startSec + last.durSec) {
+        raf = requestAnimationFrame(loop);
+        return;
+      }
       playing = false;
       if (onEnd) onEnd();
       return;
@@ -254,7 +512,8 @@ const ScoreFollow = (() => {
 
   function play(opts = {}) {
     if (!notes.length) return;
-    lastBpm = opts.bpm || 72;
+    lastBpm = opts.bpm || meta.bpm || 72;
+    playNotes = materialize(notes, lastBpm);
     onTarget = opts.onTarget || null;
     onEnd = opts.onEnd || null;
     onCursor = opts.onCursor || null;
@@ -265,13 +524,15 @@ const ScoreFollow = (() => {
       return;
     }
     stop();
+    playNotes = materialize(notes, lastBpm);
     playing = true;
     paused = false;
     pauseAccum = 0;
     t0 = performance.now();
     cursorIdx = 0;
     currentTarget = null;
-    try { osmd?.cursor?.reset?.(); osmd?.cursor?.show?.(); } catch {}
+    seekCursor(playNotes[0]?.startQ || 0);
+    if (window.TrainerAudio?.setMetroMeter) window.TrainerAudio.setMetroMeter(meta.beats, meta.beatType);
     if (window.TrainerAudio?.setMetroBpm) window.TrainerAudio.setMetroBpm(lastBpm);
     loop();
   }
@@ -301,13 +562,18 @@ const ScoreFollow = (() => {
     osmd = null;
     host = null;
     notes = [];
+    playNotes = [];
     lastXml = null;
+    meta = defaultMeta();
   }
 
   return {
     loadFile, loadXml, render, play, pause, stop, destroy,
     getNotes: () => notes,
+    getMeta: () => ({ ...meta, tempoMap: meta.tempoMap.slice() }),
     getCurrentTarget: () => currentTarget,
+    isPlaying: () => playing && !paused,
+    hasXml: () => !!lastXml,
   };
 })();
 
